@@ -157,7 +157,7 @@ def verify_admin(authorization: str = Header(None)):
         raise HTTPException(status_code=403, detail="Unauthorized")
     return True
 
-# SMTP Email Service
+# SMTP Email Service with connection timeout
 async def send_email(to_email: str, subject: str, html_content: str) -> tuple[bool, Optional[str]]:
     try:
         msg = MIMEMultipart('alternative')
@@ -174,7 +174,8 @@ async def send_email(to_email: str, subject: str, html_content: str) -> tuple[bo
             port=int(os.getenv('SMTP_PORT')),
             username=os.getenv('SMTP_USERNAME'),
             password=os.getenv('SMTP_PASSWORD'),
-            use_tls=True
+            use_tls=True,
+            timeout=10  # 10 second timeout
         )
         
         # Log successful email
