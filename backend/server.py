@@ -1194,6 +1194,49 @@ async def admin_update_user(email: str, updates: dict):
     updated_user = await db.users.find_one({"email": email}, {"_id": 0})
     return {"status": "success", "user": updated_user}
 
+# Activity Tracking Middleware
+@app.middleware("http")
+async def track_api_calls(request: Request, call_next):
+    """Middleware to track all API calls"""
+    start_time = time.time()
+    
+    # Get client info
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    
+    try:
+        response = await call_next(request)
+        
+        # Calculate response time
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Track API call
+        if request.url.path.startswith("/api"):
+            await tracker.log_api_call(
+                endpoint=request.url.path,
+                method=request.method,
+                status_code=response.status_code,
+                response_time_ms=response_time_ms,
+                ip_address=client_ip
+            )
+        
+        return response
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Track failed API call
+        if request.url.path.startswith("/api"):
+            await tracker.log_api_call(
+                endpoint=request.url.path,
+                method=request.method,
+                status_code=500,
+                response_time_ms=response_time_ms,
+                ip_address=client_ip,
+                error_message=str(e)
+            )
+        
+        raise
+
 # Include the router in the main app
 app.include_router(api_router)
 
