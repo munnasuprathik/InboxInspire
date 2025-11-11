@@ -84,24 +84,6 @@ export function PersonalityManager({ user, onUpdate }) {
     }
   };
 
-  const handleUpdateRotationMode = async (mode) => {
-    setLoading(true);
-    try {
-      await axios.put(`${API}/users/${user.email}`, {
-        rotation_mode: mode
-      });
-      toast.success("Rotation mode updated");
-      
-      // Refresh user data
-      const response = await axios.get(`${API}/users/${user.email}`);
-      onUpdate(response.data);
-    } catch (error) {
-      toast.error("Failed to update rotation mode");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
