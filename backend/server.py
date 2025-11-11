@@ -278,7 +278,7 @@ Write as if you're speaking directly to them, one-on-one."""
         return response.choices[0].message.content.strip()
     except Exception as e:
         logging.error(f"LLM generation error: {str(e)}")
-        return f"Keep pushing forward on your goals. Every step counts!"
+        return "Keep pushing forward on your goals. Every step counts!"
 
 # Get current personality for user based on rotation mode
 def get_current_personality(user_data):
