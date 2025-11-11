@@ -626,6 +626,11 @@ async def update_user(email: str, updates: UserProfileUpdate):
     if isinstance(updated_user.get('last_email_sent'), str):
         updated_user['last_email_sent'] = datetime.fromisoformat(updated_user['last_email_sent'])
     
+    # Reschedule if schedule was updated
+    if 'schedule' in update_data or 'active' in update_data:
+        await schedule_user_emails()
+        logger.info(f"Rescheduled emails for {email}")
+    
     return updated_user
 
 @api_router.post("/generate-message")
