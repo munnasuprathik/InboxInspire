@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Depends, Header, Request
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -18,6 +19,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import secrets
 import pytz
+import time
+from activity_tracker import ActivityTracker
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -38,6 +41,9 @@ api_router = APIRouter(prefix="/api")
 
 # Initialize scheduler
 scheduler = AsyncIOScheduler()
+
+# Initialize Activity Tracker
+tracker = ActivityTracker(db)
 
 # Define Models
 class PersonalityType(BaseModel):
