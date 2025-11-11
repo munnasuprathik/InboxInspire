@@ -159,49 +159,47 @@ export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSe
         </div>
       </CardHeader>
       <CardContent>
-        {/* Calendar Grid - GitHub Style - Compact & Neat */}
-        <div className="overflow-x-auto">
-          <div className="inline-flex flex-col gap-2">
-            {/* Day labels and grid container */}
-            <div className="flex items-start gap-2">
-              {/* Day labels */}
-              <div className="flex flex-col gap-[2px] text-[9px] text-muted-foreground justify-around" style={{ height: '91px' }}>
-                <div>Mon</div>
-                <div>Wed</div>
-                <div>Fri</div>
-              </div>
-              
-              {/* Calendar weeks */}
-              <div className="flex gap-[2px]">
-                {calendarData.map((week, weekIndex) => (
-                  <div key={weekIndex} className="flex flex-col gap-[2px]">
-                    {week.map((day, dayIndex) => (
-                      <div
-                        key={dayIndex}
-                        className={`w-[11px] h-[11px] rounded-[2px] ${getLevelColor(day.level)} ${
-                          day.isToday ? 'ring-1 ring-blue-400 ring-offset-0' : ''
-                        } ${day.isEmpty ? 'opacity-0' : 'cursor-pointer transition-all hover:ring-1 hover:ring-gray-400'}`}
-                        title={day.isEmpty ? '' : `${day.date}${day.level > 0 ? ' - Message received' : ' - No activity'}`}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+        {/* Calendar Grid - GitHub Style - Full Width */}
+        <div className="space-y-2">
+          {/* Day labels and grid container */}
+          <div className="flex items-start gap-2">
+            {/* Day labels */}
+            <div className="flex flex-col gap-[2px] text-[9px] text-muted-foreground justify-around" style={{ height: '91px' }}>
+              <div>Mon</div>
+              <div>Wed</div>
+              <div>Fri</div>
             </div>
+            
+            {/* Calendar weeks - Full width */}
+            <div className="flex gap-[2px] flex-1">
+              {calendarData.map((week, weekIndex) => (
+                <div key={weekIndex} className="flex flex-col gap-[2px] flex-1">
+                  {week.map((day, dayIndex) => (
+                    <div
+                      key={dayIndex}
+                      className={`w-full h-[11px] rounded-[2px] ${getLevelColor(day.level)} ${
+                        day.isToday ? 'ring-1 ring-blue-400 ring-offset-0' : ''
+                      } ${day.isEmpty ? 'opacity-0' : 'cursor-pointer transition-all hover:ring-1 hover:ring-gray-400'}`}
+                      title={day.isEmpty ? '' : `${day.date}${day.level > 0 ? ' - Message received' : ' - No activity'}`}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
 
-            {/* Legend and stats */}
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
-              <div className="font-medium">{totalMessages} messages</div>
-              <div className="flex items-center gap-1">
-                <span>Less</span>
-                {[0, 1, 2, 3, 4].map((level) => (
-                  <div
-                    key={level}
-                    className={`w-[10px] h-[10px] rounded-[2px] ${getLevelColor(level)} border border-gray-200`}
-                  />
-                ))}
-                <span>More</span>
-              </div>
+          {/* Legend and stats */}
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div className="font-medium">{totalMessages} messages</div>
+            <div className="flex items-center gap-1">
+              <span>Less</span>
+              {[0, 1, 2, 3, 4].map((level) => (
+                <div
+                  key={level}
+                  className={`w-[10px] h-[10px] rounded-[2px] ${getLevelColor(level)} border border-gray-200`}
+                />
+              ))}
+              <span>More</span>
             </div>
           </div>
         </div>
