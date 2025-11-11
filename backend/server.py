@@ -130,6 +130,7 @@ class UserSession(BaseModel):
     session_token: str
     expires_at: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 class MessageHistory(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
