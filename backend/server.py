@@ -1025,6 +1025,17 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
+    # Create database indexes for performance
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.pending_logins.create_index("email")
+        await db.message_history.create_index("email")
+        await db.message_feedback.create_index("email")
+        await db.email_logs.create_index([("email", 1), ("sent_at", -1)])
+        logger.info("Database indexes created")
+    except Exception as e:
+        logger.warning(f"Index creation warning: {e}")
+    
     # Start scheduler
     scheduler.add_job(
         send_scheduled_motivations,
