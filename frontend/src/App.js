@@ -185,24 +185,49 @@ function OnboardingScreen({ email, onComplete }) {
     setStep(4);
   };
 
+  const handleAddPersonality = () => {
+    const { type, value, customValue } = formData.currentPersonality;
+    if (!value && !customValue) {
+      toast.error("Please select or enter a personality");
+      return;
+    }
+
+    const newPersonality = {
+      type,
+      value: type === "custom" ? customValue : value,
+      active: true
+    };
+
+    setFormData({
+      ...formData,
+      personalities: [...formData.personalities, newPersonality],
+      currentPersonality: { type: "famous", value: "", customValue: "" }
+    });
+    toast.success("Personality added! Add more or continue.");
+  };
+
   const handleFinalSubmit = async () => {
+    if (formData.personalities.length === 0) {
+      toast.error("Please add at least one personality");
+      return;
+    }
+
     setLoading(true);
     try {
-      const personality = {
-        type: formData.personalityType,
-        value: formData.personalityType === "custom" ? formData.customPersonality : formData.personalityValue
-      };
-
       const schedule = {
         frequency: formData.frequency,
-        time: formData.time
+        times: [formData.time],
+        timezone: "UTC",
+        paused: false,
+        skip_next: false
       };
 
       const response = await axios.post(`${API}/onboarding`, {
         email,
         name: formData.name,
         goals: formData.goals,
-        personality,
+        personalities: formData.personalities,
+        rotation_mode: formData.rotationMode,
         schedule
       });
 
