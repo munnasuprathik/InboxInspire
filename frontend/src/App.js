@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, MailCheck, History, TrendingUp, Globe } from "lucide-react";
+import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, MailCheck, History, TrendingUp, Globe, RefreshCw, Flame, Star } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MessageHistory } from "@/components/MessageHistory";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
