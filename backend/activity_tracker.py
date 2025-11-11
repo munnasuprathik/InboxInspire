@@ -238,10 +238,16 @@ class ActivityTracker:
             }
         )
         
-        # Recent activities
+        # Recent activities (exclude _id)
         recent_activities = await self.db.activity_logs.find(
-            {"timestamp": {"$gte": cutoff_time}}
+            {"timestamp": {"$gte": cutoff_time}},
+            {"_id": 0}
         ).sort("timestamp", -1).limit(50).to_list(50)
+        
+        # Convert datetime objects to ISO strings
+        for activity in recent_activities:
+            if isinstance(activity.get('timestamp'), datetime):
+                activity['timestamp'] = activity['timestamp'].isoformat()
         
         # API performance
         api_stats = await self.db.api_analytics.aggregate([
@@ -256,10 +262,16 @@ class ActivityTracker:
             }}
         ]).to_list(1)
         
-        # System events
+        # System events (exclude _id)
         system_events = await self.db.system_events.find(
-            {"timestamp": {"$gte": cutoff_time}}
+            {"timestamp": {"$gte": cutoff_time}},
+            {"_id": 0}
         ).sort("timestamp", -1).limit(20).to_list(20)
+        
+        # Convert datetime objects to ISO strings
+        for event in system_events:
+            if isinstance(event.get('timestamp'), datetime):
+                event['timestamp'] = event['timestamp'].isoformat()
         
         return {
             "active_users_count": len(active_users),
