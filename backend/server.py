@@ -796,7 +796,41 @@ async def update_user(email: str, updates: UserProfileUpdate):
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     
     if update_data:
+        # Save version history BEFORE updating
+        if 'schedule' in update_data:
+            await version_tracker.save_schedule_version(
+                user_email=email,
+                schedule_data=update_data['schedule'],
+                changed_by="user",
+                change_reason="User updated schedule"
+            )
+        
+        if 'personalities' in update_data or 'rotation_mode' in update_data:
+            await version_tracker.save_personality_version(
+                user_email=email,
+                personalities=update_data.get('personalities', user.get('personalities', [])),
+                rotation_mode=update_data.get('rotation_mode', user.get('rotation_mode', 'sequential')),
+                changed_by="user"
+            )
+        
+        if 'name' in update_data or 'goals' in update_data:
+            await version_tracker.save_profile_version(
+                user_email=email,
+                name=update_data.get('name', user.get('name')),
+                goals=update_data.get('goals', user.get('goals')),
+                changed_by="user",
+                change_details=update_data
+            )
+        
+        # Now update the user
         await db.users.update_one({"email": email}, {"$set": update_data})
+        
+        # Track activity
+        await tracker.log_user_activity(
+            action_type="profile_updated",
+            user_email=email,
+            details={"fields_updated": list(update_data.keys())}
+        )
     
     updated_user = await db.users.find_one({"email": email}, {"_id": 0})
     if isinstance(updated_user.get('created_at'), str):
