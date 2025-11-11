@@ -189,15 +189,21 @@ export function PersonalityManager({ user, onUpdate }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="sequential">Sequential (rotate in order)</SelectItem>
-              <SelectItem value="random">Random (surprise me!)</SelectItem>
-              <SelectItem value="daily_fixed">Daily Fixed (Mon: 1st, Tue: 2nd, etc.)</SelectItem>
+              <SelectItem value="sequential">🔄 Sequential</SelectItem>
+              <SelectItem value="random">🎲 Random</SelectItem>
+              <SelectItem value="daily_fixed">📅 Daily Fixed</SelectItem>
+              <SelectItem value="weekly_rotation">📆 Weekly Rotation</SelectItem>
+              <SelectItem value="time_based">⏰ Time Based</SelectItem>
+              <SelectItem value="favorite_weighted">⭐ Favorite Weighted</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground mt-2">
-            {user.rotation_mode === "sequential" && "Each message uses the next personality in your list"}
-            {user.rotation_mode === "random" && "Each message picks a random personality"}
-            {user.rotation_mode === "daily_fixed" && "Each day of the week has a fixed personality"}
+            {user.rotation_mode === "sequential" && "Rotates through personalities in order, one per message"}
+            {user.rotation_mode === "random" && "Picks a random personality for each message"}
+            {user.rotation_mode === "daily_fixed" && "Each day of week has fixed personality (Mon: 1st, Tue: 2nd, etc.)"}
+            {user.rotation_mode === "weekly_rotation" && "Same personality for entire week, rotates weekly"}
+            {user.rotation_mode === "time_based" && "Morning messages use first half, evening uses second half"}
+            {user.rotation_mode === "favorite_weighted" && "More messages from highly-rated personalities"}
           </p>
         </div>
 
