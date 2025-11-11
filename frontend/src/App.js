@@ -630,16 +630,17 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold capitalize">{user.schedule.frequency}</p>
-                  <p className="text-sm text-muted-foreground">at {user.schedule.time}</p>
+                  <p className="text-sm text-muted-foreground">at {user.schedule.times ? user.schedule.times[0] : user.schedule.time || "09:00"}</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Inspiration Style</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Personalities</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-lg font-bold truncate">{user.personality.value}</p>
+                  <p className="text-lg font-bold">{user.personalities?.length || 0}</p>
+                  <p className="text-sm text-muted-foreground">active</p>
                 </CardContent>
               </Card>
             </div>
