@@ -355,8 +355,149 @@ async def update_streak(email: str):
         {"$set": {"streak_count": streak}}
     )
 
-# Background job to send scheduled emails
+# Send email to a SPECIFIC user (called by scheduler)
+async def send_motivation_to_user(email: str):
+    """Send motivation email to a specific user - called by their scheduled job"""
+    try:
+        # Get the specific user
+        user_data = await db.users.find_one({"email": email, "active": True}, {"_id": 0})
+        
+        if not user_data:
+            logger.warning(f"User {email} not found or inactive")
+            return
+        
+        # Check if paused or skip next
+        schedule = user_data.get('schedule', {})
+        if schedule.get('paused', False):
+            logger.info(f"Skipping {email} - schedule paused")
+            return
+        
+        if schedule.get('skip_next', False):
+            # Reset skip_next flag
+            await db.users.update_one(
+                {"email": email},
+                {"$set": {"schedule.skip_next": False}}
+            )
+            logger.info(f"Skipped {email} - skip_next was set")
+            return
+        
+        # Get current personality
+        personality = get_current_personality(user_data)
+        if not personality:
+            logger.warning(f"No personality found for {email}")
+            return
+        
+        # Generate message
+        message = await generate_motivational_message(
+            user_data['goals'],
+            personality,
+            user_data.get('name')
+        )
+        
+        # Save to message history
+        message_id = str(uuid.uuid4())
+        history = MessageHistory(
+            id=message_id,
+            email=email,
+            message=message,
+            personality=personality
+        )
+        await db.message_history.insert_one(history.model_dump())
+        
+        # Create HTML email
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: 'Georgia', serif; line-height: 1.8; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center; }}
+                .header h1 {{ color: white; margin: 0; font-size: 28px; font-weight: 600; }}
+                .content {{ background: #ffffff; padding: 40px 30px; }}
+                .message {{ font-size: 16px; line-height: 1.8; color: #2d3748; white-space: pre-wrap; }}
+                .signature {{ margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; font-style: italic; color: #718096; }}
+                .footer {{ text-align: center; padding: 20px; color: #a0aec0; font-size: 12px; }}
+                .streak {{ background: #f7fafc; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }}
+                .streak-count {{ font-size: 24px; font-weight: bold; color: #667eea; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Your Daily Inspiration</h1>
+                </div>
+                <div class="content">
+                    <p style="font-size: 18px; color: #4a5568; margin-bottom: 25px;">Hello {user_data.get('name', 'there')},</p>
+                    
+                    <div class="streak">
+                        <div>🔥 Your Streak</div>
+                        <div class="streak-count">{user_data.get('streak_count', 0)} Days</div>
+                    </div>
+                    
+                    <div class="message">{message}</div>
+                    <div class="signature">
+                        - Inspired by {personality.value}
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>You're receiving this because you subscribed to InboxInspire</p>
+                    <p>Keep pushing towards your goals!</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        success, error = await send_email(
+            email,
+            f"Your Daily Motivation from {personality.value} ✨",
+            html_content
+        )
+        
+        if success:
+            # Update last email sent time, streak, and total messages
+            await update_streak(email)
+            
+            # Rotate personality if sequential
+            personalities = user_data.get('personalities', [])
+            if user_data.get('rotation_mode') == 'sequential' and len(personalities) > 1:
+                current_index = user_data.get('current_personality_index', 0)
+                next_index = (current_index + 1) % len(personalities)
+                
+                await db.users.update_one(
+                    {"email": email},
+                    {
+                        "$set": {
+                            "last_email_sent": datetime.now(timezone.utc).isoformat(),
+                            "last_active": datetime.now(timezone.utc).isoformat(),
+                            "current_personality_index": next_index
+                        },
+                        "$inc": {"total_messages_received": 1}
+                    }
+                )
+            else:
+                await db.users.update_one(
+                    {"email": email},
+                    {
+                        "$set": {
+                            "last_email_sent": datetime.now(timezone.utc).isoformat(),
+                            "last_active": datetime.now(timezone.utc).isoformat()
+                        },
+                        "$inc": {"total_messages_received": 1}
+                    }
+                )
+            
+            logger.info(f"✓ Sent motivation to {email}")
+        else:
+            logger.error(f"✗ Failed to send to {email}: {error}")
+            
+    except Exception as e:
+        logger.error(f"Error sending to {email}: {str(e)}")
+
+# Background job to send scheduled emails (DEPRECATED - keeping for backwards compatibility)
 async def send_scheduled_motivations():
+    """DEPRECATED: This function is no longer used. Each user has their own scheduled job."""
+    logger.warning("send_scheduled_motivations called - this function is deprecated")
     try:
         users = await db.users.find({"active": True}, {"_id": 0}).to_list(1000)
         
