@@ -280,6 +280,56 @@ Write as if you're speaking directly to them, one-on-one."""
         logging.error(f"LLM generation error: {str(e)}")
         return f"Keep pushing forward on your goals. Every step counts!"
 
+# Get current personality for user based on rotation mode
+def get_current_personality(user_data):
+    personalities = user_data.get('personalities', [])
+    if not personalities:
+        return None
+    
+    rotation_mode = user_data.get('rotation_mode', 'sequential')
+    current_index = user_data.get('current_personality_index', 0)
+    
+    if rotation_mode == "random":
+        import random
+        return PersonalityType(**random.choice(personalities))
+    elif rotation_mode == "daily_fixed":
+        # Each personality gets a specific day
+        from datetime import datetime
+        day_index = datetime.now().weekday()
+        personality_index = day_index % len(personalities)
+        return PersonalityType(**personalities[personality_index])
+    else:  # sequential
+        personality = PersonalityType(**personalities[current_index])
+        # Update index for next time
+        return personality
+
+async def update_streak(email: str):
+    """Update user streak count"""
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return
+    
+    last_sent = user.get('last_email_sent')
+    streak = user.get('streak_count', 0)
+    
+    if last_sent:
+        if isinstance(last_sent, str):
+            last_sent = datetime.fromisoformat(last_sent)
+        
+        # Check if last email was yesterday
+        days_diff = (datetime.now(timezone.utc) - last_sent).days
+        if days_diff == 1:
+            streak += 1
+        elif days_diff > 1:
+            streak = 1
+    else:
+        streak = 1
+    
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"streak_count": streak}}
+    )
+
 # Background job to send scheduled emails
 async def send_scheduled_motivations():
     try:
@@ -287,10 +337,28 @@ async def send_scheduled_motivations():
         
         for user_data in users:
             try:
+                # Check if paused or skip next
+                schedule = user_data.get('schedule', {})
+                if schedule.get('paused', False):
+                    continue
+                
+                if schedule.get('skip_next', False):
+                    # Reset skip_next flag
+                    await db.users.update_one(
+                        {"email": user_data['email']},
+                        {"$set": {"schedule.skip_next": False}}
+                    )
+                    continue
+                
+                # Get current personality
+                personality = get_current_personality(user_data)
+                if not personality:
+                    continue
+                
                 # Generate message
                 message = await generate_motivational_message(
                     user_data['goals'],
-                    PersonalityType(**user_data['personality']),
+                    personality,
                     user_data.get('name')
                 )
                 
