@@ -154,9 +154,26 @@ export function ScheduleManager({ user, onUpdate }) {
             onChange={(e) => setSchedule({...schedule, times: [e.target.value]})}
             className="mt-2"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Timezone: {schedule.timezone}
-          </p>
+        </div>
+
+        {/* Timezone */}
+        <div>
+          <Label>Timezone</Label>
+          <Select 
+            value={schedule.timezone} 
+            onValueChange={(value) => setSchedule({...schedule, timezone: value})}
+          >
+            <SelectTrigger className="mt-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {TIMEZONES.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Weekly Schedule (if weekly) */}
