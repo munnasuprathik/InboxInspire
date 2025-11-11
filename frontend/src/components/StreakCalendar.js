@@ -159,28 +159,30 @@ export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSe
         </div>
       </CardHeader>
       <CardContent>
-        {/* Calendar Grid - GitHub Style */}
+        {/* Calendar Grid - GitHub Style - Full Width */}
         <div className="space-y-2">
           {/* Day labels */}
-          <div className="flex items-start gap-2">
-            <div className="w-8 flex flex-col gap-1 text-[10px] text-muted-foreground">
-              <div style={{ height: '14px' }}>Mon</div>
-              <div style={{ height: '14px' }}></div>
-              <div style={{ height: '14px' }}>Wed</div>
-              <div style={{ height: '14px' }}></div>
-              <div style={{ height: '14px' }}>Fri</div>
+          <div className="flex items-start gap-3">
+            <div className="w-10 flex flex-col gap-[3px] text-[10px] text-muted-foreground pt-[2px]">
+              <div style={{ height: '11px' }}>Mon</div>
+              <div style={{ height: '11px' }}></div>
+              <div style={{ height: '11px' }}>Wed</div>
+              <div style={{ height: '11px' }}></div>
+              <div style={{ height: '11px' }}>Fri</div>
+              <div style={{ height: '11px' }}></div>
+              <div style={{ height: '11px' }}>Sun</div>
             </div>
             
-            {/* Weeks */}
-            <div className="flex gap-1 flex-1">
+            {/* Weeks - Full Width */}
+            <div className="flex gap-[3px] flex-1">
               {calendarData.map((week, weekIndex) => (
-                <div key={weekIndex} className="flex flex-col gap-1">
+                <div key={weekIndex} className="flex flex-col gap-[3px] flex-1">
                   {week.map((day, dayIndex) => (
                     <div
                       key={dayIndex}
-                      className={`w-[14px] h-[14px] rounded-sm ${getLevelColor(day.level)} ${
+                      className={`w-full aspect-square rounded-sm ${getLevelColor(day.level)} ${
                         day.isToday ? 'ring-1 ring-blue-500' : ''
-                      } ${day.isEmpty ? '' : 'cursor-pointer transition-all hover:ring-2 hover:ring-gray-400'}`}
+                      } ${day.isEmpty ? '' : 'cursor-pointer transition-all hover:ring-2 hover:ring-gray-400 hover:scale-110'}`}
                       title={day.isEmpty ? '' : `${day.date}${day.level > 0 ? ' - Message received' : ' - No activity'}`}
                     />
                   ))}
@@ -190,7 +192,7 @@ export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSe
           </div>
 
           {/* Legend and stats */}
-          <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between pt-3 text-xs text-muted-foreground">
             <div>{totalMessages} messages</div>
             <div className="flex items-center gap-1">
               <span>Less</span>
