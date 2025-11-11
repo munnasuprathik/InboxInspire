@@ -594,6 +594,10 @@ async def complete_onboarding(request: OnboardingRequest):
     # Clean up pending login
     await db.pending_logins.delete_one({"email": request.email})
     
+    # Schedule emails for this new user
+    await schedule_user_emails()
+    logger.info(f"Scheduled emails for new user: {request.email}")
+    
     return {"status": "success", "user": profile}
 
 @api_router.get("/users/{email}")
