@@ -505,6 +505,28 @@ function OnboardingScreen({ email, onComplete }) {
                 />
               </div>
 
+              <div>
+                <Label className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Your Timezone
+                </Label>
+                <Select 
+                  value={formData.timezone} 
+                  onValueChange={(value) => setFormData({...formData, timezone: value})}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {TIMEZONES.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setStep(3)} className="flex-1">Back</Button>
                 <Button onClick={handleFinalSubmit} disabled={loading} className="flex-1" data-testid="onboarding-finish-btn">
