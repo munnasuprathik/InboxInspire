@@ -510,10 +510,8 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const [formData, setFormData] = useState({
     name: user.name,
     goals: user.goals,
-    personalityType: user.personality.type,
-    personalityValue: user.personality.value,
     frequency: user.schedule.frequency,
-    time: user.schedule.time,
+    time: user.schedule.times ? user.schedule.times[0] : (user.schedule.time || "09:00"),
     active: user.active
   });
   const [previewMessage, setPreviewMessage] = useState("");
