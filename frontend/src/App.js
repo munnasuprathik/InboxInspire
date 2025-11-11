@@ -798,27 +798,40 @@ function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [feedbacks, setFeedbacks] = useState([]);
   const [adminToken, setAdminToken] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterActive, setFilterActive] = useState("all"); // all, active, inactive
 
   const fetchAdminData = async (token) => {
     try {
+      setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
       
-      const [statsRes, usersRes, logsRes] = await Promise.all([
+      const [statsRes, usersRes, logsRes, feedbackRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/users`, { headers }),
-        axios.get(`${API}/admin/email-logs?limit=50`, { headers })
+        axios.get(`${API}/admin/email-logs?limit=100`, { headers }),
+        axios.get(`${API}/admin/feedback?limit=100`, { headers })
       ]);
 
       setStats(statsRes.data);
       setUsers(usersRes.data.users);
       setLogs(logsRes.data.logs);
+      setFeedbacks(feedbackRes.data.feedbacks);
       setAuthenticated(true);
+      
+      // Store token in sessionStorage
+      sessionStorage.setItem('adminToken', token);
     } catch (error) {
       toast.error("Authentication failed");
       setAuthenticated(false);
+      sessionStorage.removeItem('adminToken');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -826,6 +839,63 @@ function AdminDashboard() {
     e.preventDefault();
     fetchAdminData(adminToken);
   };
+
+  const handleLogout = () => {
+    setAuthenticated(false);
+    sessionStorage.removeItem('adminToken');
+    setAdminToken("");
+  };
+
+  const handleRefresh = () => {
+    const token = sessionStorage.getItem('adminToken');
+    if (token) {
+      fetchAdminData(token);
+    }
+  };
+
+  const handleSendTestEmail = async (email) => {
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      await axios.post(`${API}/send-now/${email}`, {}, { headers });
+      toast.success(`Test email sent to ${email}`);
+      handleRefresh();
+    } catch (error) {
+      toast.error("Failed to send test email");
+    }
+  };
+
+  const handleToggleUserStatus = async (email, currentStatus) => {
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      await axios.put(`${API}/admin/users/${email}`, 
+        { active: !currentStatus }, 
+        { headers }
+      );
+      toast.success(`User ${!currentStatus ? 'activated' : 'deactivated'}`);
+      handleRefresh();
+    } catch (error) {
+      toast.error("Failed to update user status");
+    }
+  };
+
+  // Check for stored token on mount
+  useEffect(() => {
+    const storedToken = sessionStorage.getItem('adminToken');
+    if (storedToken) {
+      setAdminToken(storedToken);
+      fetchAdminData(storedToken);
+    }
+  }, []);
+
+  // Filter users based on search and status
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = filterActive === "all" || 
+                         (filterActive === "active" && user.active) ||
+                         (filterActive === "inactive" && !user.active);
+    return matchesSearch && matchesFilter;
+  });
 
   if (!authenticated) {
     return (
@@ -847,7 +917,9 @@ function AdminDashboard() {
                 onChange={(e) => setAdminToken(e.target.value)}
                 required
               />
-              <Button type="submit" className="w-full">Access Dashboard</Button>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Authenticating..." : "Access Dashboard"}
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -863,14 +935,20 @@ function AdminDashboard() {
             <h1 className="text-3xl md:text-4xl font-bold">Admin Dashboard</h1>
             <p className="text-muted-foreground">Monitor InboxInspire</p>
           </div>
-          <Button variant="outline" onClick={() => setAuthenticated(false)}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleRefresh} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -880,15 +958,9 @@ function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.total_users}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Active Users</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-green-600">{stats.active_users}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.active_users} active
+                </p>
               </CardContent>
             </Card>
 
@@ -901,6 +973,9 @@ function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.total_emails_sent}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.failed_emails} failed
+                </p>
               </CardContent>
             </Card>
 
@@ -912,7 +987,35 @@ function AdminDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-blue-600">{stats.success_rate}%</p>
+                <p className="text-3xl font-bold text-green-600">{stats.success_rate}%</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Flame className="h-4 w-4" />
+                  Avg Streak
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-orange-600">{stats.avg_streak}</p>
+                <p className="text-xs text-muted-foreground mt-1">days</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Star className="h-4 w-4" />
+                  Avg Rating
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-yellow-600">{stats.avg_rating}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.total_feedback} feedbacks
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -920,32 +1023,93 @@ function AdminDashboard() {
 
         <Tabs defaultValue="users" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
             <TabsTrigger value="logs">Email Logs</TabsTrigger>
+            <TabsTrigger value="feedback">Feedback</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
             <Card>
               <CardHeader>
-                <CardTitle>All Users</CardTitle>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <CardTitle>All Users</CardTitle>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Search users..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="max-w-xs"
+                    />
+                    <select
+                      value={filterActive}
+                      onChange={(e) => setFilterActive(e.target.value)}
+                      className="px-3 py-2 border rounded-md"
+                    >
+                      <option value="all">All</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {users.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-semibold">{user.name}</p>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {user.personality.value} • {user.schedule.frequency}
-                        </p>
+                  {filteredUsers.map((user) => {
+                    const personalities = user.personalities || [];
+                    const schedule = user.schedule || {};
+                    
+                    return (
+                      <div key={user.id} className="p-4 border rounded-lg hover:bg-slate-50 transition">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold">{user.name}</p>
+                              <div className={`h-2 w-2 rounded-full ${user.active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            </div>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                            <div className="mt-2 space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                🎯 Goals: {user.goals?.substring(0, 60)}...
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                🎭 Personalities: {personalities.length > 0 
+                                  ? personalities.map(p => p.value).join(', ') 
+                                  : 'None'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                📅 Schedule: {schedule.frequency || 'Not set'} at {schedule.times?.[0] || 'N/A'} ({schedule.timezone || 'UTC'})
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                🔥 Streak: {user.streak_count || 0} days • 
+                                📧 Messages: {user.total_messages_received || 0}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2 ml-4">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleSendTestEmail(user.email)}
+                            >
+                              <Mail className="h-3 w-3 mr-1" />
+                              Send Now
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant={user.active ? "destructive" : "default"}
+                              onClick={() => handleToggleUserStatus(user.email, user.active)}
+                            >
+                              {user.active ? 'Deactivate' : 'Activate'}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className={`h-3 w-3 rounded-full ${user.active ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        <span className="text-sm">{user.active ? 'Active' : 'Inactive'}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  {filteredUsers.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">No users found</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -961,24 +1125,160 @@ function AdminDashboard() {
                   {logs.map((log) => (
                     <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
                       <div className="flex-1">
-                        <p className="font-medium">{log.email}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{log.email}</p>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {log.status}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground">{log.subject}</p>
+                        {log.error_message && (
+                          <p className="text-xs text-red-600 mt-1">Error: {log.error_message}</p>
+                        )}
                       </div>
-                      <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(log.sent_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                  {logs.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">No logs found</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="feedback">
+            <Card>
+              <CardHeader>
+                <CardTitle>User Feedback</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {feedbacks.map((feedback) => (
+                    <div key={feedback.id} className="p-4 border rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className="font-medium text-sm">{feedback.email}</p>
+                            <div className="flex">
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`h-3 w-3 ${
+                                    i < feedback.rating
+                                      ? 'fill-yellow-400 text-yellow-400'
+                                      : 'text-gray-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          {feedback.comment && (
+                            <p className="text-sm text-muted-foreground">{feedback.comment}</p>
+                          )}
+                        </div>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(log.sent_at).toLocaleString()}
-                        </span>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {log.status}
+                          {new Date(feedback.created_at).toLocaleString()}
                         </span>
                       </div>
                     </div>
                   ))}
+                  {feedbacks.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">No feedback yet</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <div className="grid gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Platform Analytics</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium">Total Messages Delivered</span>
+                        <span className="text-2xl font-bold">{stats?.total_messages || 0}</span>
+                      </div>
+                      <div className="h-2 bg-slate-200 rounded-full">
+                        <div 
+                          className="h-2 bg-indigo-500 rounded-full" 
+                          style={{ width: '75%' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium">User Engagement Rate</span>
+                        <span className="text-2xl font-bold">{stats?.engagement_rate || 0}%</span>
+                      </div>
+                      <div className="h-2 bg-slate-200 rounded-full">
+                        <div 
+                          className="h-2 bg-green-500 rounded-full" 
+                          style={{ width: `${stats?.engagement_rate || 0}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Active Users</p>
+                        <p className="text-2xl font-bold text-blue-600">{stats?.active_users || 0}</p>
+                      </div>
+                      <div className="p-4 bg-red-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Inactive Users</p>
+                        <p className="text-2xl font-bold text-red-600">{stats?.inactive_users || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Popular Personalities</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {(() => {
+                      const personalityCounts = {};
+                      users.forEach(user => {
+                        (user.personalities || []).forEach(p => {
+                          personalityCounts[p.value] = (personalityCounts[p.value] || 0) + 1;
+                        });
+                      });
+                      
+                      return Object.entries(personalityCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10)
+                        .map(([name, count]) => (
+                          <div key={name} className="flex items-center justify-between">
+                            <span className="text-sm">{name}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-32 h-2 bg-slate-200 rounded-full">
+                                <div 
+                                  className="h-2 bg-indigo-500 rounded-full" 
+                                  style={{ width: `${(count / users.length) * 100}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium w-8">{count}</span>
+                            </div>
+                          </div>
+                        ));
+                    })()}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
