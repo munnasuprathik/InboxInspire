@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Clock, Pause, Play, SkipForward } from "lucide-react";
 import { toast } from "sonner";
+import { TIMEZONES } from "@/utils/timezones";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
