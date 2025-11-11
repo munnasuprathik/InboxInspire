@@ -494,7 +494,7 @@ async def root():
     return {"message": "InboxInspire API", "version": "2.0"}
 
 @api_router.post("/auth/login")
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, background_tasks: BackgroundTasks):
     """Send magic link to email"""
     # Generate magic link token
     token = secrets.token_urlsafe(32)
@@ -518,7 +518,7 @@ async def login(request: LoginRequest):
         )
         user_exists = False
     
-    # Send magic link email
+    # Prepare magic link email
     magic_link = f"https://inboxinspire.preview.emergentagent.com/?token={token}&email={request.email}"
     
     html_content = f"""
@@ -542,7 +542,8 @@ async def login(request: LoginRequest):
     </html>
     """
     
-    await send_email(request.email, "Your InboxInspire Login Link 🔐", html_content)
+    # Send email in background - immediate response to user
+    background_tasks.add_task(send_email, request.email, "Your InboxInspire Login Link 🔐", html_content)
     
     return {"status": "success", "message": "Login link sent to your email", "user_exists": user_exists}
 
