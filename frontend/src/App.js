@@ -146,9 +146,13 @@ function OnboardingScreen({ email, onComplete }) {
   const [formData, setFormData] = useState({
     name: "",
     goals: "",
-    personalityType: "famous",
-    personalityValue: "",
-    customPersonality: "",
+    personalities: [],
+    currentPersonality: {
+      type: "famous",
+      value: "",
+      customValue: ""
+    },
+    rotationMode: "sequential",
     frequency: "daily",
     time: "09:00"
   });
