@@ -62,12 +62,17 @@ class UserProfile(BaseModel):
     email: EmailStr
     name: str
     goals: str
-    personality: PersonalityType
+    personalities: List[PersonalityType] = []  # Multiple personalities support
+    rotation_mode: Literal["sequential", "random", "daily_fixed"] = "sequential"
+    current_personality_index: int = 0
     schedule: ScheduleConfig
     magic_link_token: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     active: bool = True
     last_email_sent: Optional[datetime] = None
+    streak_count: int = 0
+    total_messages_received: int = 0
+    last_active: Optional[datetime] = None
 
 class LoginRequest(BaseModel):
     email: EmailStr
