@@ -363,6 +363,16 @@ async def send_scheduled_motivations():
                 )
                 
                 # Create HTML email
+                # Save to message history
+                message_id = str(uuid.uuid4())
+                history = MessageHistory(
+                    id=message_id,
+                    email=user_data['email'],
+                    message=message,
+                    personality=personality
+                )
+                await db.message_history.insert_one(history.model_dump())
+                
                 html_content = f"""
                 <html>
                 <head>
@@ -375,6 +385,8 @@ async def send_scheduled_motivations():
                         .message {{ font-size: 16px; line-height: 1.8; color: #2d3748; white-space: pre-wrap; }}
                         .signature {{ margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; font-style: italic; color: #718096; }}
                         .footer {{ text-align: center; padding: 20px; color: #a0aec0; font-size: 12px; }}
+                        .streak {{ background: #f7fafc; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }}
+                        .streak-count {{ font-size: 24px; font-weight: bold; color: #667eea; }}
                     </style>
                 </head>
                 <body>
@@ -384,9 +396,15 @@ async def send_scheduled_motivations():
                         </div>
                         <div class="content">
                             <p style="font-size: 18px; color: #4a5568; margin-bottom: 25px;">Hello {user_data.get('name', 'there')},</p>
+                            
+                            <div class="streak">
+                                <div>🔥 Your Streak</div>
+                                <div class="streak-count">{user_data.get('streak_count', 0)} Days</div>
+                            </div>
+                            
                             <div class="message">{message}</div>
                             <div class="signature">
-                                - Inspired by {user_data['personality']['value']}
+                                - Inspired by {personality.value}
                             </div>
                         </div>
                         <div class="footer">
@@ -400,7 +418,7 @@ async def send_scheduled_motivations():
                 
                 success, error = await send_email(
                     user_data['email'],
-                    f"Your Daily Motivation from {user_data['personality']['value']} ✨",
+                    f"Your Daily Motivation from {personality.value} ✨",
                     html_content
                 )
                 
