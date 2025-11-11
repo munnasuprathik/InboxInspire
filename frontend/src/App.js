@@ -545,11 +545,22 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const handleGeneratePreview = async () => {
     setLoading(true);
     try {
+      // Get current personality from user
+      const personalities = user.personalities || [];
+      if (personalities.length === 0) {
+        toast.error("No personalities configured");
+        setLoading(false);
+        return;
+      }
+      
+      const currentIndex = user.current_personality_index || 0;
+      const currentPersonality = personalities[currentIndex];
+      
       const response = await axios.post(`${API}/generate-message`, {
         goals: formData.goals,
         personality: {
-          type: formData.personalityType,
-          value: formData.personalityValue
+          type: currentPersonality.type,
+          value: currentPersonality.value
         },
         user_name: formData.name
       });
