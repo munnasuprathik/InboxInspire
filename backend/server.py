@@ -92,9 +92,46 @@ class OnboardingRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     name: Optional[str] = None
     goals: Optional[str] = None
-    personality: Optional[PersonalityType] = None
+    personalities: Optional[List[PersonalityType]] = None
+    rotation_mode: Optional[Literal["sequential", "random", "daily_fixed"]] = None
     schedule: Optional[ScheduleConfig] = None
     active: Optional[bool] = None
+
+class MessageFeedback(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    message_id: Optional[str] = None
+    personality: PersonalityType
+    rating: int  # 1-5 stars
+    feedback_text: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class MessageFeedbackCreate(BaseModel):
+    message_id: Optional[str] = None
+    rating: int
+    feedback_text: Optional[str] = None
+
+class MessageHistory(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    message: str
+    personality: PersonalityType
+    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    rating: Optional[int] = None
+
+class UserAnalytics(BaseModel):
+    email: str
+    streak_count: int
+    total_messages: int
+    favorite_personality: Optional[str] = None
+    avg_rating: Optional[float] = None
+    last_active: Optional[datetime] = None
+    engagement_rate: float = 0.0
+    personality_stats: dict = {}
 
 class MessageGenRequest(BaseModel):
     goals: str
