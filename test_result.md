@@ -121,17 +121,17 @@ backend:
         comment: "✅ EMAIL SCHEDULING BUG FIX VERIFIED! Comprehensive testing completed with multiple test scenarios: 1) User-specific scheduling confirmed - each user has unique job_id (user_{email_sanitized}) and separate scheduler jobs, 2) Send-now endpoint isolation verified - emails sent ONLY to specified user, message history shows perfect isolation between users (quiccledaily@gmail.com and rakeshkumar101221@gmail.com tested), 3) Scheduler state verified - jobs use lambda functions correctly, no deprecated send_scheduled_motivations() calls detected in logs, 4) Schedule updates work properly - jobs recreated with new settings while preserving other users' schedules. Backend logs show 'Added job schedule_user_emails.<locals>.<lambda>' confirming lambda-based user-specific jobs. Message history isolation tested with sequential sends to multiple users - each user's count increased only when they were the target."
 
 frontend:
-  - task: "No frontend changes needed"
+  - task: "Fix AdminDashboard runtime error"
     implemented: true
     working: true
-    file: "N/A"
+    file: "/app/frontend/src/App.js, /app/frontend/src/components/PersonalityManager.js"
     stuck_count: 0
-    priority: "low"
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
-        comment: "This is a backend-only bug fix. No frontend changes required."
+        comment: "Fixed runtime error 'Cannot read properties of undefined (reading value)' in AdminDashboard. Added defensive checks for personalities array in AdminDashboard (App.js line 1060-1068) and PersonalityManager.js (line 168). Also added enhanced admin features: search/filter users, user activation toggle, test email sending, feedback tab, analytics tab with popular personalities chart. Webpack cache cleared to serve updated bundle."
 
 metadata:
   created_by: "main_agent"
