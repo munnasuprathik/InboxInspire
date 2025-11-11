@@ -662,7 +662,7 @@ async def send_motivation_now(email: str):
                 <p style="font-size: 18px; color: #4a5568; margin-bottom: 25px;">Hello {user.get('name', 'there')},</p>
                 <div class="message">{message}</div>
                 <div class="signature">
-                    - Inspired by {user['personality']['value']}
+                    - Inspired by {personality.value}
                 </div>
             </div>
         </div>
@@ -672,16 +672,22 @@ async def send_motivation_now(email: str):
     
     success, error = await send_email(
         email,
-        f"Your Motivation from {user['personality']['value']} ✨",
+        f"Your Motivation from {personality.value} ✨",
         html_content
     )
     
     if success:
         await db.users.update_one(
             {"email": email},
-            {"$set": {"last_email_sent": datetime.now(timezone.utc).isoformat()}}
+            {
+                "$set": {
+                    "last_email_sent": datetime.now(timezone.utc).isoformat(),
+                    "last_active": datetime.now(timezone.utc).isoformat()
+                },
+                "$inc": {"total_messages_received": 1}
+            }
         )
-        return {"status": "success", "message": "Email sent successfully"}
+        return {"status": "success", "message": "Email sent successfully", "message_id": message_id}
     else:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {error}")
 
