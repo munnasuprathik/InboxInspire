@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSent }) {
@@ -12,80 +11,53 @@ export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSe
   }, [streakCount, totalMessages, lastEmailSent, currentMonth]);
 
   const generateCalendarData = () => {
-    const data = [];
+    const today = new Date();
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     
-    // Get first day of month and total days in month
+    // Get first day of month and total days
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
-    const startDayOfWeek = firstDay.getDay(); // 0 = Sunday
     
-    // Calculate total weeks needed
-    const totalCells = Math.ceil((daysInMonth + startDayOfWeek) / 7) * 7;
-    const weeks = totalCells / 7;
+    const days = [];
     
-    const today = new Date();
-    
-    for (let week = 0; week < weeks; week++) {
-      const weekData = [];
-      for (let day = 0; day < 7; day++) {
-        const cellIndex = week * 7 + day;
-        const dayNum = cellIndex - startDayOfWeek + 1;
+    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+      const date = new Date(year, month, dayNum);
+      
+      // Determine activity level
+      let level = 0;
+      if (lastEmailSent) {
+        const lastSent = new Date(lastEmailSent);
+        const daysSince = Math.floor((today - date) / (1000 * 60 * 60 * 24));
         
-        if (dayNum < 1 || dayNum > daysInMonth) {
-          // Empty cell
-          weekData.push({
-            date: null,
-            level: -1,
-            dayOfWeek: day,
-            isToday: false,
-            isEmpty: true
-          });
-        } else {
-          const date = new Date(year, month, dayNum);
-          
-          // Determine if this day had activity
-          let level = 0;
-          if (lastEmailSent) {
-            const lastSent = new Date(lastEmailSent);
-            const daysSince = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-            
-            // If within streak count and not in future, mark as active
-            if (daysSince <= streakCount && daysSince >= 0 && date <= today) {
-              level = 4; // High activity
-            }
-          }
-          
-          weekData.push({
-            date: date.toISOString().split('T')[0],
-            level,
-            dayOfWeek: day,
-            isToday: date.toDateString() === today.toDateString(),
-            isEmpty: false,
-            dayNum
-          });
+        // If within streak count and not in future
+        if (daysSince <= streakCount && daysSince >= 0 && date <= today) {
+          // Vary intensity based on recency
+          if (daysSince <= 3) level = 4;
+          else if (daysSince <= 7) level = 3;
+          else if (daysSince <= 14) level = 2;
+          else level = 1;
         }
       }
-      data.push(weekData);
+      
+      days.push({
+        date: date.toISOString().split('T')[0],
+        dayNum,
+        level,
+        isToday: date.toDateString() === today.toDateString()
+      });
     }
     
-    setCalendarData(data);
+    setCalendarData(days);
   };
 
   const getLevelColor = (level) => {
-    if (level === -1) return "bg-transparent"; // Empty cells
-    if (level === 0) return "bg-gray-100";
-    if (level === 1) return "bg-green-200";
-    if (level === 2) return "bg-green-300";
-    if (level === 3) return "bg-green-400";
-    return "bg-green-500";
-  };
-
-  const getDayLabel = (dayIndex) => {
-    const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    return days[dayIndex];
+    if (level === 0) return "bg-gray-100 hover:bg-gray-200";
+    if (level === 1) return "bg-emerald-200 hover:bg-emerald-300";
+    if (level === 2) return "bg-emerald-300 hover:bg-emerald-400";
+    if (level === 3) return "bg-emerald-400 hover:bg-emerald-500";
+    return "bg-emerald-500 hover:bg-emerald-600";
   };
 
   const goToPreviousMonth = () => {
@@ -95,14 +67,9 @@ export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSe
   const goToNextMonth = () => {
     const today = new Date();
     const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
-    // Don't go beyond current month
     if (nextMonth <= today) {
       setCurrentMonth(nextMonth);
     }
-  };
-
-  const goToCurrentMonth = () => {
-    setCurrentMonth(new Date());
   };
 
   const isCurrentMonth = () => {
