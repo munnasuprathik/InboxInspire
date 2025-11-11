@@ -178,10 +178,30 @@ function OnboardingScreen({ email, onComplete }) {
 
   const handleSubmitPersonality = (e) => {
     e.preventDefault();
-    if (!formData.personalityValue && !formData.customPersonality) {
-      toast.error("Please select or enter a personality/tone");
+    
+    // Add current personality if not already added
+    const { type, value, customValue } = formData.currentPersonality;
+    if (value || customValue) {
+      const newPersonality = {
+        type,
+        value: type === "custom" ? customValue : value,
+        active: true
+      };
+      
+      if (formData.personalities.length === 0 || 
+          !formData.personalities.some(p => p.value === newPersonality.value)) {
+        setFormData({
+          ...formData,
+          personalities: [...formData.personalities, newPersonality]
+        });
+      }
+    }
+    
+    if (formData.personalities.length === 0 && !value && !customValue) {
+      toast.error("Please add at least one personality");
       return;
     }
+    
     setStep(4);
   };
 
