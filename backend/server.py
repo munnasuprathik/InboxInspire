@@ -63,7 +63,7 @@ class UserProfile(BaseModel):
     name: str
     goals: str
     personalities: List[PersonalityType] = []  # Multiple personalities support
-    rotation_mode: Literal["sequential", "random", "daily_fixed"] = "sequential"
+    rotation_mode: Literal["sequential", "random", "daily_fixed", "weekly_rotation", "favorite_weighted", "time_based"] = "sequential"
     current_personality_index: int = 0
     schedule: ScheduleConfig
     magic_link_token: Optional[str] = None
