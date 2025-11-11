@@ -25,6 +25,7 @@ from activity_tracker import ActivityTracker
 from version_tracker import VersionTracker
 import warnings
 from contextlib import asynccontextmanager
+from functools import lru_cache
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -61,7 +62,14 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[get_env('DB_NAME', 'inbox_inspire')]
 
 # OpenAI client
-openai_client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+openai_client = AsyncOpenAI(api_key=get_env('OPENAI_API_KEY'))
+
+# Tavily research
+TAVILY_API_KEY = os.getenv('TAVILY_API_KEY')
+TAVILY_SEARCH_URL = "https://api.tavily.com/search"
+
+# Cache for personality voice descriptions
+personality_voice_cache: Dict[str, str] = {}
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -281,15 +289,24 @@ async def generate_unique_motivational_message(
         import random
         message_type = random.choice(available_types)
         
-        # Personality style
-        personality_prompt = ""
-        if personality.type == "famous":
-            personality_prompt = f"Channel {personality.value}'s unique voice, style, and way of thinking. Use their characteristic phrases and perspectives."
-        elif personality.type == "tone":
-            personality_prompt = f"Write in an authentic {personality.value.lower()} tone."
+        # Personality style via research
+        voice_profile = await fetch_personality_voice(personality)
+        if voice_profile:
+            personality_prompt = f"""VOICE PROFILE:
+{voice_profile}
+RULES:
+- Write exactly in this voice.
+- Do not mention these notes, the personality name, or that you researched it.
+- Use natural, human language—no AI phrasing."""
         else:
-            personality_prompt = f"Adopt this style: {personality.value}"
-        
+            fallback_voice = personality.value if personality.value else "warm, encouraging mentor"
+            personality_prompt = f"""VOICE PROFILE:
+Sound like a {fallback_voice}.
+RULES:
+- Capture their energy and mannerisms authentically.
+- Do not say you are copying anyone or mention tone explicitly.
+- Keep the language human and grounded."""
+
         # Engaging questions pool
         question_templates = [
             "What's one small action you can take RIGHT NOW toward this?",
@@ -319,6 +336,9 @@ async def generate_unique_motivational_message(
         else:
             streak_context = "🚀 Starting fresh. Let's build momentum!"
         
+        research_snippet = await fetch_research_snippet(goals, personality)
+        insights_block = f"RESEARCH INSIGHT: {research_snippet}\n" if research_snippet else ""
+
         prompt = f"""You are an elite personal coach creating a UNIQUE daily motivation message.
 
 {personality_prompt}
@@ -327,6 +347,7 @@ USER'S GOALS: {goals}
 USER'S NAME: {name or "there"}
 STREAK: {streak_context}
 MESSAGE TYPE: {message_type}
+{insights_block}
 
 CRITICAL RULES:
 1. NEVER copy/paste the user's goals - reference them creatively and naturally
@@ -334,6 +355,7 @@ CRITICAL RULES:
 3. Be SPECIFIC and ACTIONABLE - not vague platitudes
 4. Keep it SHORT - 3-4 paragraphs maximum
 5. Make it CONVERSATIONAL - like texting a friend who cares
+6. If a research insight is provided, weave it naturally into the story without sounding like a summary or citing the source
 
 MESSAGE TYPE GUIDELINES:
 - motivational_story: Share a brief, real example of someone who overcame similar challenges
@@ -354,7 +376,7 @@ Write an authentic, powerful message that feels personal and impossible to ignor
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a world-class motivational coach who creates deeply personal, unique messages that inspire real action. You never use clichés or generic advice. Every message feels handcrafted."},
+                {"role": "system", "content": "You are a world-class motivational coach who creates deeply personal, unique messages that inspire real action. You never use clichés, never repeat yourself, and you always sound human—not like an AI summarizer. Every message feels handcrafted."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.9,  # Higher for more creativity
@@ -382,10 +404,106 @@ async def generate_motivational_message(goals: str, personality: PersonalityType
     return message
 
 # Get current personality for user based on rotation mode
+async def fetch_research_snippet(goals: str, personality: PersonalityType) -> Optional[str]:
+    """
+    Fetch a short, fresh insight using Tavily to keep emails feeling researched.
+    Returns a one or two sentence snippet or None.
+    """
+    if not TAVILY_API_KEY or not goals:
+        return None
+
+    query_parts = [goals.strip()]
+    if personality and personality.value:
+        query_parts.append(f'{personality.value} style inspiration')
+    query = " ".join(query_parts)
+
+    payload = {
+        "api_key": TAVILY_API_KEY,
+        "query": query,
+        "max_results": 3,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            response = await client.post(TAVILY_SEARCH_URL, json=payload)
+            response.raise_for_status()
+            data = response.json()
+
+        results = data.get("results") or []
+        for result in results:
+            content = result.get("content") or result.get("snippet")
+            if content:
+                trimmed = content.strip()
+                if len(trimmed) > 300:
+                    trimmed = trimmed[:297].rsplit(" ", 1)[0] + "..."
+                return trimmed
+
+    except Exception as e:
+        logger.warning(f"Tavily research failed: {e}")
+
+    return None
+
+
+async def fetch_personality_voice(personality: PersonalityType) -> Optional[str]:
+    """
+    Fetch a concise description of how the requested personality or tone speaks.
+    Results are cached to avoid repeated lookups.
+    """
+    if personality is None:
+        return None
+
+    cache_key = f"{personality.type}:{personality.value}"
+    if cache_key in personality_voice_cache:
+        return personality_voice_cache[cache_key]
+
+    if personality.type == "custom":
+        personality_voice_cache[cache_key] = personality.value
+        return personality.value
+
+    if not TAVILY_API_KEY:
+        return None
+
+    if personality.type == "famous":
+        query = f"What is the communication style of {personality.value}? Describe tone, pacing, vocabulary, and attitude."
+    elif personality.type == "tone":
+        query = f"Describe how to communicate in a {personality.value.lower()} tone. Focus on voice, energy, and sentence structure."
+    else:
+        query = f"Describe the communication style called {personality.value}. Focus on how it sounds."
+
+    payload = {
+        "api_key": TAVILY_API_KEY,
+        "query": query,
+        "max_results": 2,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            response = await client.post(TAVILY_SEARCH_URL, json=payload)
+            response.raise_for_status()
+            data = response.json()
+
+        results = data.get("results") or []
+        for result in results:
+            content = result.get("content") or result.get("snippet")
+            if content:
+                trimmed = content.strip()
+                if len(trimmed) > 400:
+                    trimmed = trimmed[:397].rsplit(" ", 1)[0] + "..."
+                personality_voice_cache[cache_key] = trimmed
+                return trimmed
+    except Exception as e:
+        logger.warning(f"Tavily personality research failed: {e}")
+
+    return None
+
+
 def get_current_personality(user_data):
     personalities = user_data.get('personalities', [])
     if not personalities:
-        return None
+        return PersonalityType(
+            type="custom",
+            value=user_data.get("custom_personality_description", "a warm, encouraging mentor"),
+        )
     
     rotation_mode = user_data.get('rotation_mode', 'sequential')
     current_index = user_data.get('current_personality_index', 0)
@@ -1651,25 +1769,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def create_email_job(user_email: str):
-    """Wrapper to properly execute async email sending from scheduler"""
-    async def send_email_wrapper():
+async def create_email_job(user_email: str):
+    """Scheduled job executed by AsyncIOScheduler within the main event loop."""
+    try:
         await send_motivation_to_user(user_email)
-        
-        # Track system event
+
         await tracker.log_system_event(
             event_type="scheduled_email_sent",
             event_category="scheduler",
             details={"user_email": user_email},
             status="success"
         )
-    
-    # Run in new event loop
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(send_email_wrapper())
-        loop.close()
     except Exception as e:
         logger.error(f"Error in email job for {user_email}: {str(e)}")
 

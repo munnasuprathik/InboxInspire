@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import "@/App.css";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, MailCheck, History, TrendingUp, Globe, RefreshCw, Flame, Star } from "lucide-react";
+import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk } from "@clerk/clerk-react";
+import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, History, TrendingUp, Globe, RefreshCw, Flame, Star, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MessageHistory } from "@/components/MessageHistory";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
@@ -36,124 +37,69 @@ const TONE_OPTIONS = [
   "Calm & Meditative", "Poetic & Artistic"
 ];
 
-function LoginScreen({ onLoginSuccess }) {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-
-  useEffect(() => {
-    // Check for magic link token in URL
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const emailParam = params.get('email');
-    
-    if (token && emailParam) {
-      verifyToken(emailParam, token);
-    }
-  }, []);
-
-  const verifyToken = async (email, token) => {
-    try {
-      const response = await axios.post(`${API}/auth/verify`, { email, token });
-      
-      if (response.data.user_exists) {
-        onLoginSuccess(response.data.user, true);
-      } else {
-        onLoginSuccess({ email }, false);
-      }
-      
-      // Clean URL
-      window.history.replaceState({}, document.title, "/");
-    } catch (error) {
-      toast.error("Invalid or expired login link");
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (!email) {
-      toast.error("Please enter your email");
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      // Show immediate feedback
-      toast.info("Sending magic link...", { duration: 2000 });
-      
-      const response = await axios.post(`${API}/auth/login`, { email });
-      setEmailSent(true);
-      toast.success("Magic link sent! Check your inbox 📧");
-    } catch (error) {
-      console.error("Login error:", error);
-      toast.error(error.response?.data?.detail || "Failed to send login link. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (emailSent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="max-w-md w-full text-center">
-          <CardContent className="pt-12 pb-8">
-            <div className="flex justify-center mb-6">
-              <div className="h-20 w-20 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center">
-                <MailCheck className="h-10 w-10 text-white" />
-              </div>
-            </div>
-            <h2 className="text-2xl font-bold mb-4">Check Your Email</h2>
-            <p className="text-muted-foreground mb-6">
-              We've sent a login link to <span className="font-semibold">{email}</span>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Click the link in your email to access your account
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+function AuthScreen() {
+  const pathname = window.location.pathname;
+  const isSignUp = pathname.startsWith("/sign-up");
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center shadow-lg">
-              <Mail className="h-8 w-8 text-white" />
-            </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 p-4">
+      <Card className="w-full max-w-md shadow-xl border-0">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+            <Mail className="h-8 w-8 text-white" />
           </div>
-          <CardTitle className="text-3xl">InboxInspire</CardTitle>
-          <CardDescription>Get personalized motivation in your inbox</CardDescription>
+          <div>
+            <CardTitle className="text-3xl font-bold">
+              {isSignUp ? "Join InboxInspire" : "InboxInspire"}
+            </CardTitle>
+            <CardDescription>
+              {isSignUp
+                ? "Create your account to get daily personalized motivation"
+                : "Sign in to get personalized motivation in your inbox"}
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <Label htmlFor="login-email">Email Address</Label>
-              <Input
-                id="login-email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-2"
-                data-testid="login-email-input"
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading} data-testid="login-btn">
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                  Sending...
-                </>
-              ) : (
-                "Send Login Link"
-              )}
-            </Button>
-          </form>
+        <CardContent className="pt-2">
+          {isSignUp ? (
+            <SignUp
+              routing="path"
+              path="/sign-up"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  card: "shadow-none border-none bg-transparent",
+                  headerTitle: "hidden",
+                  headerSubtitle: "hidden",
+                  socialButtonsBlockButton: "border border-slate-200",
+                  formButtonPrimary: "bg-indigo-600 hover:bg-indigo-700 text-white",
+                },
+                variables: {
+                  colorPrimary: "#4f46e5",
+                },
+              }}
+              afterSignUpUrl="/"
+            />
+          ) : (
+            <SignIn
+              routing="path"
+              path="/sign-in"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  card: "shadow-none border-none bg-transparent",
+                  headerTitle: "hidden",
+                  headerSubtitle: "hidden",
+                  socialButtonsBlockButton: "border border-slate-200",
+                  formButtonPrimary: "bg-indigo-600 hover:bg-indigo-700 text-white",
+                },
+                variables: {
+                  colorPrimary: "#4f46e5",
+                },
+              }}
+              afterSignInUrl="/"
+              afterSignUpUrl="/"
+            />
+          )}
         </CardContent>
       </Card>
     </div>
@@ -1311,49 +1257,137 @@ function AdminDashboard() {
   );
 }
 
-function App() {
-  const [view, setView] = useState("login"); // login, onboarding, dashboard, admin
-  const [user, setUser] = useState(null);
+function SignedInRouter() {
+  if (window.location.pathname === "/admin") {
+    return <AdminDashboard />;
+  }
+  return <UserApp />;
+}
 
-  // Check for admin route
+function UserApp() {
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
+  const [appUser, setAppUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  const email = user?.primaryEmailAddress?.emailAddress;
+
+  const loadUserProfile = useCallback(async () => {
+    if (!email) {
+      return;
+    }
+
+    setLoading(true);
+    setNeedsOnboarding(false);
+    setLoadError(false);
+
+    try {
+      const response = await axios.get(`${API}/users/${email}`);
+      setAppUser(response.data);
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setNeedsOnboarding(true);
+        setAppUser(null);
+      } else {
+        console.error("Failed to load user profile:", error);
+        toast.error("Failed to load your profile. Please try again.");
+        setLoadError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [email]);
+
   useEffect(() => {
-    if (window.location.pathname === "/admin") {
-      setView("admin");
+    if (!isLoaded) {
+      return;
     }
-  }, []);
-
-  const handleLoginSuccess = (userData, userExists) => {
-    if (userExists) {
-      setUser(userData);
-      setView("dashboard");
-    } else {
-      setUser({ email: userData.email });
-      setView("onboarding");
+    if (!email) {
+      toast.error("Unable to determine your email address.");
+      return;
     }
-  };
+    loadUserProfile();
+  }, [isLoaded, email, loadUserProfile]);
 
   const handleOnboardingComplete = (userData) => {
-    setUser(userData);
-    setView("dashboard");
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    setView("login");
+    setAppUser(userData);
+    setNeedsOnboarding(false);
   };
 
   const handleUserUpdate = (updatedUser) => {
-    setUser(updatedUser);
+    setAppUser(updatedUser);
   };
 
+  const handleLogout = () => {
+    signOut();
+  };
+
+  if (!isLoaded || !email) {
+    return <LoadingState message="Preparing your experience..." />;
+  }
+
+  if (loading) {
+    return <LoadingState message="Loading your dashboard..." />;
+  }
+
+  if (needsOnboarding) {
+    return <OnboardingScreen email={email} onComplete={handleOnboardingComplete} />;
+  }
+
+  if (loadError) {
+    return <ErrorState onRetry={loadUserProfile} />;
+  }
+
+  if (!appUser) {
+    return <LoadingState message="Setting up your account..." />;
+  }
+
+  return (
+    <DashboardScreen
+      user={appUser}
+      onLogout={handleLogout}
+      onUserUpdate={handleUserUpdate}
+    />
+  );
+}
+
+function LoadingState({ message }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      <p className="text-sm">{message}</p>
+    </div>
+  );
+}
+
+function ErrorState({ onRetry }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center p-6">
+      <h2 className="text-xl font-semibold text-gray-800">Something went wrong</h2>
+      <p className="text-sm text-muted-foreground max-w-sm">
+        We couldn't load your InboxInspire account data. Please try again in a moment.
+      </p>
+      <Button onClick={onRetry}>
+        Try Again
+      </Button>
+    </div>
+  );
+}
+
+function App() {
   return (
     <div className="App">
       <Toaster position="top-center" />
-      
-      {view === "admin" && <AdminDashboard />}
-      {view === "login" && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
-      {view === "onboarding" && <OnboardingScreen email={user?.email} onComplete={handleOnboardingComplete} />}
-      {view === "dashboard" && <DashboardScreen user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />}
+
+      <SignedOut>
+        <AuthScreen />
+      </SignedOut>
+
+      <SignedIn>
+        <SignedInRouter />
+      </SignedIn>
     </div>
   );
 }

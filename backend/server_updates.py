@@ -1,27 +1,29 @@
-# Fixes and additions to integrate into server.py
-
-# 1. Add import at top
-from version_tracker import VersionTracker
-
-# 2. Initialize version tracker (after tracker = ActivityTracker(db))
-version_tracker = VersionTracker(db)
-
-# 3. Fix for email scheduling - create sync wrapper
-def send_email_sync_wrapper(user_email: str):
-    """Synchronous wrapper for async email sending"""
-    import asyncio
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(send_motivation_to_user(user_email))
-    finally:
-        loop.close()
-
-# 4. Replace lambda in schedule_user_emails with:
-# scheduler.add_job(
-#     send_email_sync_wrapper,
-#     CronTrigger(...),
-#     args=[email],  # Pass email as argument
-#     id=job_id,
-#     replace_existing=True
-# )
+# Notes for keeping server.py in sync with recent updates.
+#
+# 1. Imports
+#    - from contextlib import asynccontextmanager
+#    - import warnings
+#
+# 2. Environment handling
+#    - Define a get_env helper that returns a required environment variable,
+#      optionally falling back to a default. This prevents crashes when local
+#      .env files are incomplete and emits a warning instead.
+#
+# 3. OpenAI and Mongo initialisation
+#    - Use get_env for both MONGO_URL/DB_NAME and create the AsyncOpenAI
+#      instance with the OPENAI_API_KEY pulled from get_env/os.getenv.
+#
+# 4. Scheduler wrapper
+#    - Retain create_email_job to run the async send_motivation_to_user in a
+#      fresh event loop for APScheduler.
+#
+# 5. Lifespan events
+#    - Replace @app.on_event("startup"/"shutdown") with an asynccontextmanager
+#      assigned to app.router.lifespan_context. Inside, create indexes,
+#      start the scheduler and call schedule_user_emails. On shutdown,
+#      stop the scheduler and close the Mongo client.
+#
+# 6. Bug fixes
+#    - Ensure send_motivation_to_user calls update_streak (not the old
+#      update_user_streak helper).
+#    - Keep version_tracker initialised globally for schedule/profile history.
