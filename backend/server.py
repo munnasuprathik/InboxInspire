@@ -445,28 +445,43 @@ async def send_motivation_to_user(email: str):
             logger.info(f"Skipped {email} - skip_next was set")
             return
         
+        # Update streak
+        await update_user_streak(email)
+        user_data = await db.users.find_one({"email": email}, {"_id": 0})  # Refresh to get updated streak
+        
         # Get current personality
         personality = get_current_personality(user_data)
         if not personality:
             logger.warning(f"No personality found for {email}")
             return
         
-        # Generate message
-        message = await generate_motivational_message(
+        # Get previous messages to avoid repetition
+        previous_messages = await db.message_history.find(
+            {"email": email},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(10).to_list(10)
+        
+        # Generate UNIQUE message with questions
+        message, message_type = await generate_unique_motivational_message(
             user_data['goals'],
             personality,
-            user_data.get('name')
+            user_data.get('name'),
+            user_data.get('streak_count', 0),
+            previous_messages
         )
         
-        # Save to message history
+        # Save to message history with message type for tracking
         message_id = str(uuid.uuid4())
-        history = MessageHistory(
-            id=message_id,
-            email=email,
-            message=message,
-            personality=personality
-        )
-        await db.message_history.insert_one(history.model_dump())
+        history_doc = {
+            "id": message_id,
+            "email": email,
+            "message": message,
+            "personality": personality.model_dump(),
+            "message_type": message_type,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "streak_at_time": user_data.get('streak_count', 0)
+        }
+        await db.message_history.insert_one(history_doc)
         
         # Create HTML email
         html_content = f"""
