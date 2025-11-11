@@ -140,8 +140,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Fix email scheduling to send only to specific user"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -149,3 +148,5 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Fixed critical email scheduling bug. The issue was in schedule_user_emails() function where scheduler.add_job() was calling send_scheduled_motivations() which iterates through ALL users. Changed to use lambda functions that call send_motivation_to_user(user_email) for each user's specific job. Backend has been restarted and logs show jobs are now created with lambda functions. Ready for testing with multiple test users to verify each user only receives emails at their own scheduled time."
+  - agent: "testing"
+    message: "✅ CRITICAL EMAIL SCHEDULING BUG FIX SUCCESSFULLY VERIFIED! Completed comprehensive testing with real users (quiccledaily@gmail.com, rakeshkumar101221@gmail.com). Key findings: 1) Perfect email isolation - send-now endpoint sends ONLY to target user, other users unaffected, 2) Unique scheduler jobs per user with correct job_ids (user_{email_sanitized}), 3) Message history shows complete isolation - each user's messages correctly attributed, 4) Backend logs confirm lambda-based scheduling (no deprecated function calls), 5) Schedule updates work correctly. The bug where emails were sent to ALL users when any schedule triggered is completely resolved. Each user now receives emails only for their own scheduled times."
