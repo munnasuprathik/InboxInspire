@@ -214,83 +214,137 @@ async def send_email(to_email: str, subject: str, html_content: str) -> tuple[bo
         return False, error_msg
 
 # Enhanced LLM Service with deep personality matching
-async def generate_motivational_message(goals: str, personality: PersonalityType, user_name: Optional[str] = None) -> str:
+async def generate_unique_motivational_message(
+    goals: str, 
+    personality: PersonalityType, 
+    name: Optional[str] = None,
+    streak_count: int = 0,
+    previous_messages: list = None
+) -> tuple[str, str]:
+    """Generate UNIQUE, engaging motivational message with questions - never repeat"""
     try:
-        # Build detailed system message based on personality type
+        # Message types for variety
+        message_types = [
+            "motivational_story",
+            "action_challenge", 
+            "mindset_shift",
+            "accountability_prompt",
+            "celebration_message",
+            "real_world_example"
+        ]
+        
+        # Get previous message types to avoid repetition
+        recent_types = []
+        if previous_messages:
+            recent_types = [msg.get('message_type', '') for msg in previous_messages[:5]]
+        
+        # Choose a message type we haven't used recently
+        available_types = [t for t in message_types if t not in recent_types]
+        if not available_types:
+            available_types = message_types
+        
+        import random
+        message_type = random.choice(available_types)
+        
+        # Personality style
+        personality_prompt = ""
         if personality.type == "famous":
-            person = personality.value
-            system_msg = f"""You ARE {person}. You don't just mimic - you embody their complete essence.
-
-Your task: Write a personal motivational message as {person} would actually write it.
-
-Key requirements:
-- Use {person}'s EXACT speech patterns, vocabulary, and thought processes
-- Reference their life philosophy, famous quotes, and core beliefs naturally
-- Match their tone perfectly - whether visionary, philosophical, direct, warm, etc.
-- Include specific examples or metaphors they would use
-- Write as if {person} personally knows this person and cares about their journey
-- Keep it 2-3 powerful paragraphs
-- Make it feel like a personal letter, not a generic message
-
-Remember: You ARE {person}. Think like them. Write like them. Inspire like them."""
-        
+            personality_prompt = f"Channel {personality.value}'s unique voice, style, and way of thinking. Use their characteristic phrases and perspectives."
         elif personality.type == "tone":
-            tone = personality.value
-            tone_instructions = {
-                "Funny & Uplifting": "Use humor, wit, and playful language. Include funny analogies. Make them smile while motivating. Be lighthearted but genuinely encouraging.",
-                "Friendly & Warm": "Write like a close friend who truly cares. Be warm, supportive, and understanding. Use conversational language. Be the friend they need.",
-                "Roasting (Tough Love)": "Be brutally honest but caring. Call out excuses. Challenge them directly. Use tough love - harsh but helpful. Make them uncomfortable enough to take action.",
-                "Serious & Direct": "Be straightforward and no-nonsense. Focus on facts and action steps. Be professional but motivating. Clear, concise, powerful.",
-                "Philosophical & Deep": "Use philosophical concepts, metaphors, and deep insights. Reference life's bigger picture. Be thought-provoking and contemplative.",
-                "Energetic & Enthusiastic": "HIGH ENERGY! Use exclamation points, power words, and excitement. Make them feel pumped up and ready to conquer the world!",
-                "Calm & Meditative": "Be peaceful, zen-like, and mindful. Use calming language. Focus on inner peace and steady progress. Be the voice of tranquility.",
-                "Poetic & Artistic": "Use beautiful imagery, metaphors, and poetic language. Paint pictures with words. Make it lyrical and inspiring."
-            }
-            
-            instruction = tone_instructions.get(tone, "Be motivating and match the requested tone perfectly.")
-            system_msg = f"""You are a master motivational writer with a {tone} style.
-
-{instruction}
-
-Write a deeply personal motivational message in 2-3 paragraphs. Make every word count. Match the {tone} tone PERFECTLY throughout."""
+            personality_prompt = f"Write in an authentic {personality.value.lower()} tone."
+        else:
+            personality_prompt = f"Adopt this style: {personality.value}"
         
-        else:  # custom
-            system_msg = f"""You are a personalized motivational message writer.
-
-User's specific requirements: {personality.value}
-
-Follow their requirements EXACTLY. Match the style, tone, and approach they described perfectly. Make it personal and deeply meaningful.
-
-Write 2-3 powerful paragraphs."""
+        # Engaging questions pool
+        question_templates = [
+            "What's one small action you can take RIGHT NOW toward this?",
+            "If you had to pick just ONE thing to focus on today, what would move the needle?",
+            "What's the biggest obstacle in your way, and how can you sidestep it?",
+            "Imagine it's 6 months from now and you've succeeded - what did you do differently?",
+            "What would you tell someone else in your position right now?",
+            "What's one excuse you're going to eliminate today?",
+            "Which part of your goal actually excites you the most?",
+            "What's a micro-win you can celebrate from yesterday?",
+            "If you could ask your future successful self one question, what would it be?",
+            "What's one thing you know you should do but keep avoiding?"
+        ]
         
-        # Build personalized prompt
-        name_part = f" for {user_name}" if user_name else ""
-        prompt = f"""Write a motivational message{name_part} who is working on these goals:
-
-{goals}
-
-Make this message:
-- Deeply personal and specific to their goals
-- Actionable - give them something they can do TODAY
-- Genuine - like you truly care about their success
-- Memorable - something they'll want to re-read
-
-Write as if you're speaking directly to them, one-on-one."""
+        question = random.choice(question_templates)
         
+        # Streak milestone messages
+        streak_context = ""
+        if streak_count >= 100:
+            streak_context = f"🎯 INCREDIBLE! {streak_count} days of consistency. You're in the top 1%."
+        elif streak_count >= 30:
+            streak_context = f"🔥 {streak_count} day streak! You've built a real habit here."
+        elif streak_count >= 7:
+            streak_context = f"💪 {streak_count} days strong! The hardest part is behind you."
+        elif streak_count >= 1:
+            streak_context = f"✨ Day {streak_count}. Every journey starts with a single step."
+        else:
+            streak_context = "🚀 Starting fresh. Let's build momentum!"
+        
+        prompt = f"""You are an elite personal coach creating a UNIQUE daily motivation message.
+
+{personality_prompt}
+
+USER'S GOALS: {goals}
+USER'S NAME: {name or "there"}
+STREAK: {streak_context}
+MESSAGE TYPE: {message_type}
+
+CRITICAL RULES:
+1. NEVER copy/paste the user's goals - reference them creatively and naturally
+2. Make it COMPLETELY UNIQUE - no generic phrases
+3. Be SPECIFIC and ACTIONABLE - not vague platitudes
+4. Keep it SHORT - 3-4 paragraphs maximum
+5. Make it CONVERSATIONAL - like texting a friend who cares
+
+MESSAGE TYPE GUIDELINES:
+- motivational_story: Share a brief, real example of someone who overcame similar challenges
+- action_challenge: Give ONE specific task to accomplish today
+- mindset_shift: Reframe their thinking about obstacles
+- accountability_prompt: Check in on progress and create urgency
+- celebration_message: Recognize recent progress and build confidence
+- real_world_example: Use concrete analogies from business/sports/life
+
+STRUCTURE:
+1. Hook with the streak celebration or surprising insight
+2. Core message (2-3 paragraphs) - tie to their goals WITHOUT quoting them
+3. Call to action or mindset shift
+4. DO NOT include a question - it will be added separately
+
+Write an authentic, powerful message that feels personal and impossible to ignore:"""
+
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": system_msg},
+                {"role": "system", "content": "You are a world-class motivational coach who creates deeply personal, unique messages that inspire real action. You never use clichés or generic advice. Every message feels handcrafted."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.8,
-            max_tokens=500
+            temperature=0.9,  # Higher for more creativity
+            max_tokens=500,
+            presence_penalty=0.6,  # Avoid repetition
+            frequency_penalty=0.6   # Encourage variety
         )
         
-        return response.choices[0].message.content.strip()
+        message = response.choices[0].message.content.strip()
+        
+        # Add engaging question at the end
+        message_with_question = f"{message}\n\n💭 Question for you: {question}"
+        
+        return message_with_question, message_type
+        
     except Exception as e:
-        logging.error(f"LLM generation error: {str(e)}")
-        return "Keep pushing forward on your goals. Every step counts!"
+        logger.error(f"Error generating message: {str(e)}")
+        default_msg = f"Hey {name or 'there'}! 🔥 Day {streak_count} of your journey.\n\nYou know what you need to do today. The question isn't whether you CAN do it - it's whether you WILL.\n\nWhat's one action you're taking today that your future self will thank you for?"
+        return default_msg, "default"
+
+# Backward compatibility wrapper
+async def generate_motivational_message(goals: str, personality: PersonalityType, name: Optional[str] = None) -> str:
+    """Wrapper for backward compatibility"""
+    message, _ = await generate_unique_motivational_message(goals, personality, name, 0, [])
+    return message
 
 # Get current personality for user based on rotation mode
 def get_current_personality(user_data):
