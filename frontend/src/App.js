@@ -70,14 +70,23 @@ function LoginScreen({ onLoginSuccess }) {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!email) {
+      toast.error("Please enter your email");
+      return;
+    }
+    
     setLoading(true);
     
     try {
+      // Show immediate feedback
+      toast.info("Sending magic link...", { duration: 2000 });
+      
       const response = await axios.post(`${API}/auth/login`, { email });
       setEmailSent(true);
-      toast.success("Check your email for the login link!");
+      toast.success("Magic link sent! Check your inbox 📧");
     } catch (error) {
-      toast.error("Failed to send login link");
+      console.error("Login error:", error);
+      toast.error(error.response?.data?.detail || "Failed to send login link. Please try again.");
     } finally {
       setLoading(false);
     }
