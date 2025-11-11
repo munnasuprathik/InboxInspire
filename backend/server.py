@@ -1583,6 +1583,52 @@ async def schedule_user_emails():
     except Exception as e:
         logger.error(f"Error in schedule_user_emails: {str(e)}")
 
+# ============================================================================
+# VERSION HISTORY & DATA PRESERVATION ENDPOINTS
+# ============================================================================
+
+@api_router.get("/users/{email}/history/schedule", dependencies=[Depends(verify_admin)])
+async def get_user_schedule_history(email: str, limit: int = 50):
+    """Get complete schedule change history for a user"""
+    history = await version_tracker.get_schedule_history(email, limit)
+    return {"user_email": email, "versions": len(history), "history": history}
+
+@api_router.get("/users/{email}/history/personalities", dependencies=[Depends(verify_admin)])
+async def get_user_personality_history(email: str, limit: int = 50):
+    """Get complete personality change history for a user"""
+    history = await version_tracker.get_personality_history(email, limit)
+    return {"user_email": email, "versions": len(history), "history": history}
+
+@api_router.get("/users/{email}/history/profile", dependencies=[Depends(verify_admin)])
+async def get_user_profile_history(email: str, limit: int = 50):
+    """Get complete profile change history for a user"""
+    history = await version_tracker.get_profile_history(email, limit)
+    return {"user_email": email, "versions": len(history), "history": history}
+
+@api_router.get("/users/{email}/history/complete", dependencies=[Depends(verify_admin)])
+async def get_complete_user_history(email: str):
+    """Get ALL change history for a user"""
+    history = await version_tracker.get_all_user_history(email)
+    return history
+
+@api_router.get("/admin/deleted-data", dependencies=[Depends(verify_admin)])
+async def get_deleted_data(limit: int = 100):
+    """View all soft-deleted data that can be restored"""
+    deleted = await db.deleted_data.find(
+        {"can_restore": True},
+        {"_id": 0}
+    ).sort("deleted_at", -1).limit(limit).to_list(limit)
+    return {"deleted_items": deleted, "count": len(deleted)}
+
+@api_router.post("/admin/restore/{deletion_id}", dependencies=[Depends(verify_admin)])
+async def restore_deleted_data(deletion_id: str):
+    """Restore soft-deleted data"""
+    success = await version_tracker.restore_deleted(deletion_id)
+    if success:
+        return {"status": "restored", "deletion_id": deletion_id}
+    else:
+        raise HTTPException(status_code=404, detail="Cannot restore - data not found or already restored")
+
 @app.on_event("startup")
 async def startup_event():
     # Create database indexes for performance
