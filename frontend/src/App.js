@@ -359,7 +359,7 @@ function OnboardingScreen({ email, onComplete }) {
                     <Label>Your Personalities ({formData.personalities.length})</Label>
                     {formData.personalities.map((p, i) => (
                       <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                        <span className="font-medium">{p.value}</span>
+                        <span className="font-medium">{p?.value || 'Unknown'}</span>
                         <Button
                           variant="ghost"
                           size="sm"
