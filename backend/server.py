@@ -423,11 +423,38 @@ async def send_scheduled_motivations():
                 )
                 
                 if success:
-                    # Update last email sent time
-                    await db.users.update_one(
-                        {"email": user_data['email']},
-                        {"$set": {"last_email_sent": datetime.now(timezone.utc).isoformat()}}
-                    )
+                    # Update last email sent time, streak, and total messages
+                    await update_streak(user_data['email'])
+                    
+                    # Rotate personality if sequential
+                    personalities = user_data.get('personalities', [])
+                    if user_data.get('rotation_mode') == 'sequential' and len(personalities) > 1:
+                        current_index = user_data.get('current_personality_index', 0)
+                        next_index = (current_index + 1) % len(personalities)
+                        
+                        await db.users.update_one(
+                            {"email": user_data['email']},
+                            {
+                                "$set": {
+                                    "last_email_sent": datetime.now(timezone.utc).isoformat(),
+                                    "last_active": datetime.now(timezone.utc).isoformat(),
+                                    "current_personality_index": next_index
+                                },
+                                "$inc": {"total_messages_received": 1}
+                            }
+                        )
+                    else:
+                        await db.users.update_one(
+                            {"email": user_data['email']},
+                            {
+                                "$set": {
+                                    "last_email_sent": datetime.now(timezone.utc).isoformat(),
+                                    "last_active": datetime.now(timezone.utc).isoformat()
+                                },
+                                "$inc": {"total_messages_received": 1}
+                            }
+                        )
+                    
                     logging.info(f"Sent motivation to {user_data['email']}")
                 else:
                     logging.error(f"Failed to send to {user_data['email']}: {error}")
