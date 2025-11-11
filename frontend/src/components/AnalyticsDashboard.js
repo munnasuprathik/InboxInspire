@@ -7,24 +7,29 @@ import { toast } from "sonner";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-export function AnalyticsDashboard({ email }) {
+export function AnalyticsDashboard({ email, refreshKey = 0 }) {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchAnalytics();
-  }, [email]);
+    const fetchAnalytics = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API}/users/${email}/analytics`);
+        setAnalytics(response.data);
+      } catch (error) {
+        toast.error("Failed to load analytics");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const fetchAnalytics = async () => {
     try {
-      const response = await axios.get(`${API}/users/${email}/analytics`);
-      setAnalytics(response.data);
+      fetchAnalytics();
     } catch (error) {
-      toast.error("Failed to load analytics");
-    } finally {
-      setLoading(false);
+      // error display handled in fetchAnalytics
     }
-  };
+  }, [email, refreshKey]);
 
   if (loading) {
     return <div className="text-center py-8">Loading analytics...</div>;

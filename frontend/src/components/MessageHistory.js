@@ -6,11 +6,12 @@ import { Star, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { formatDateTimeForTimezone } from "@/utils/timezoneFormatting";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-export function MessageHistory({ email }) {
+export function MessageHistory({ email, timezone, refreshKey = 0, onFeedbackSubmitted }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -20,12 +21,16 @@ export function MessageHistory({ email }) {
 
   useEffect(() => {
     fetchMessages();
-  }, [email]);
+  }, [email, refreshKey]);
 
   const fetchMessages = async () => {
     try {
+      setLoading(true);
       const response = await axios.get(`${API}/users/${email}/message-history`);
-      setMessages(response.data.messages);
+      const sorted = [...response.data.messages].sort(
+        (a, b) => new Date(b.sent_at) - new Date(a.sent_at),
+      );
+      setMessages(sorted);
     } catch (error) {
       toast.error("Failed to load messages");
     } finally {
@@ -44,13 +49,17 @@ export function MessageHistory({ email }) {
       await axios.post(`${API}/users/${email}/feedback`, {
         message_id: selectedMessage?.id,
         rating,
-        feedback_text: feedbackText
+        feedback_text: feedbackText,
+        personality: selectedMessage?.personality,
       });
       toast.success("Thank you for your feedback!");
       setSelectedMessage(null);
       setRating(0);
       setFeedbackText("");
       fetchMessages();
+      if (typeof onFeedbackSubmitted === "function") {
+        onFeedbackSubmitted();
+      }
     } catch (error) {
       toast.error("Failed to submit feedback");
     } finally {
@@ -77,20 +86,27 @@ export function MessageHistory({ email }) {
       {messages.map((message) => (
         <Card key={message.id} data-testid="message-history-item">
           <CardHeader>
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-lg">From {message.personality.value}</CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {new Date(message.sent_at).toLocaleDateString()} at {new Date(message.sent_at).toLocaleTimeString()}
+                  {formatDateTimeForTimezone(message.sent_at, timezone)}
                 </p>
               </div>
-              {message.rating && (
-                <div className="flex items-center gap-1">
-                  {[...Array(message.rating)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {message.used_fallback && (
+                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                    Backup message
+                  </span>
+                )}
+                {message.rating && (
+                  <div className="flex items-center gap-1">
+                    {[...Array(message.rating)].map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">

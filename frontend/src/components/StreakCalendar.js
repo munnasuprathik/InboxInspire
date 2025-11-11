@@ -1,54 +1,72 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { differenceInCalendarDays, startOfDay } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
-export function StreakCalendar({ streakCount = 0, totalMessages = 0, lastEmailSent }) {
+export function StreakCalendar({
+  streakCount = 0,
+  totalMessages = 0,
+  lastEmailSent,
+  messageHistory = [],
+  timezone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+}) {
   const [calendarData, setCalendarData] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
     generateCalendarData();
-  }, [streakCount, totalMessages, lastEmailSent, currentMonth]);
+  }, [streakCount, totalMessages, lastEmailSent, currentMonth, messageHistory, timezone]);
 
   const generateCalendarData = () => {
-    const today = new Date();
+    const today = startOfDay(toZonedTime(new Date(), timezone));
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-    
-    // Get first day of month and total days
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    
+
+    const firstDay = new Date(Date.UTC(year, month, 1));
+    const lastDay = new Date(Date.UTC(year, month + 1, 0));
+    const daysInMonth = lastDay.getUTCDate();
+
+    const activityMap = new Map();
+    messageHistory.forEach((entry) => {
+      if (!entry.sent_at) return;
+      const entryDate = new Date(entry.sent_at);
+      const zonedDate = startOfDay(toZonedTime(entryDate, timezone));
+      const key = zonedDate.toISOString().split("T")[0];
+      activityMap.set(key, (activityMap.get(key) || 0) + 1);
+    });
+
     const days = [];
-    
+
     for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
-      const date = new Date(year, month, dayNum);
-      
-      // Determine activity level
+      const utcDate = new Date(Date.UTC(year, month, dayNum));
+      const zonedDate = toZonedTime(utcDate, timezone);
+      const key = zonedDate.toISOString().split("T")[0];
+      const messageCount = activityMap.get(key) || 0;
+
       let level = 0;
-      if (lastEmailSent) {
-        const lastSent = new Date(lastEmailSent);
-        const daysSince = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-        
-        // If within streak count and not in future
-        if (daysSince <= streakCount && daysSince >= 0 && date <= today) {
-          // Vary intensity based on recency
+      if (messageCount > 0) {
+        level = Math.min(4, messageCount);
+      } else if (lastEmailSent) {
+        const lastSent = startOfDay(toZonedTime(lastEmailSent, timezone));
+        const daysSince = differenceInCalendarDays(today, zonedDate);
+        if (daysSince >= 0 && daysSince < streakCount) {
           if (daysSince <= 3) level = 4;
           else if (daysSince <= 7) level = 3;
           else if (daysSince <= 14) level = 2;
           else level = 1;
         }
       }
-      
+
       days.push({
-        date: date.toISOString().split('T')[0],
+        date: key,
         dayNum,
         level,
-        isToday: date.toDateString() === today.toDateString()
+        isToday: zonedDate.toDateString() === today.toDateString(),
+        messageCount,
       });
     }
-    
+
     setCalendarData(days);
   };
 

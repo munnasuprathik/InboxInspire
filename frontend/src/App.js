@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import "@/App.css";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,11 @@ import { ScheduleManager } from "@/components/ScheduleManager";
 import { StreakCalendar } from "@/components/StreakCalendar";
 import { RealTimeAnalytics } from "@/components/RealTimeAnalytics";
 import { TIMEZONES } from "@/utils/timezones";
+import {
+  formatScheduleTime,
+  formatDateTimeForTimezone,
+  getDisplayTimezone,
+} from "@/utils/timezoneFormatting";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -484,6 +489,31 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   });
   const [previewMessage, setPreviewMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const userTimezone = user.schedule?.timezone;
+  const userScheduleTimeLabel = formatScheduleTime(
+    user.schedule?.times?.[0] || user.schedule?.time || "",
+    userTimezone,
+  );
+  const userTimezoneDisplay = getDisplayTimezone(userTimezone);
+  const schedulePaused = user.schedule?.paused;
+  const statusLabel = schedulePaused ? "Paused" : user.active ? "Active" : "Inactive";
+  const statusColor = schedulePaused ? "bg-yellow-400" : user.active ? "bg-green-500" : "bg-gray-400";
+
+  const handleUserStateUpdate = useCallback((updatedUser) => {
+    onUserUpdate(updatedUser);
+    setRefreshKey((prev) => prev + 1);
+  }, [onUserUpdate]);
+
+  const refreshUserData = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/users/${user.email}`);
+      handleUserStateUpdate(response.data);
+    } catch (error) {
+      console.error("Failed to refresh user data:", error);
+    }
+  }, [user.email, handleUserStateUpdate]);
 
   const handleUpdate = async () => {
     setLoading(true);
@@ -500,7 +530,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       };
 
       const response = await axios.put(`${API}/users/${user.email}`, updates);
-      onUserUpdate(response.data);
+      handleUserStateUpdate(response.data);
       setEditMode(false);
       toast.success("Settings updated!");
     } catch (error) {
@@ -533,7 +563,11 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
         user_name: formData.name
       });
       setPreviewMessage(response.data.message);
-      toast.success("Preview generated!");
+      if (response.data.used_fallback) {
+        toast.warning("Preview generated using a backup message while the AI is busy.");
+      } else {
+        toast.success("Preview generated!");
+      }
     } catch (error) {
       toast.error("Failed to generate preview");
     } finally {
@@ -546,6 +580,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     try {
       await axios.post(`${API}/send-now/${user.email}`);
       toast.success("Motivation sent to your inbox!");
+      await refreshUserData();
     } catch (error) {
       toast.error("Failed to send email");
     } finally {
@@ -591,8 +626,8 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-2">
-                    <div className={`h-3 w-3 rounded-full ${user.active ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    <span className="text-2xl font-bold">{user.active ? 'Active' : 'Paused'}</span>
+                    <div className={`h-3 w-3 rounded-full ${statusColor}`} />
+                    <span className="text-2xl font-bold">{statusLabel}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -603,7 +638,12 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold capitalize">{user.schedule.frequency}</p>
-                  <p className="text-sm text-muted-foreground">at {user.schedule.times ? user.schedule.times[0] : user.schedule.time || "09:00"}</p>
+                  <p className="text-sm text-muted-foreground">
+                    at {userScheduleTimeLabel}
+                    {userTimezoneDisplay && (
+                      <span className="ml-1 text-xs text-gray-500">({userTimezoneDisplay})</span>
+                    )}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -662,17 +702,23 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               streakCount={user.streak_count || 0}
               totalMessages={user.total_messages_received || 0}
               lastEmailSent={user.last_email_sent}
+              timezone={userTimezone}
             />
-            <AnalyticsDashboard email={user.email} />
+            <AnalyticsDashboard email={user.email} refreshKey={refreshKey} />
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <MessageHistory email={user.email} />
+            <MessageHistory
+              email={user.email}
+              timezone={userTimezone}
+              refreshKey={refreshKey}
+              onFeedbackSubmitted={refreshUserData}
+            />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
-            <PersonalityManager user={user} onUpdate={onUserUpdate} />
-            <ScheduleManager user={user} onUpdate={onUserUpdate} />
+            <PersonalityManager user={user} onUpdate={handleUserStateUpdate} />
+            <ScheduleManager user={user} onUpdate={handleUserStateUpdate} />
             
             <Card>
               <CardHeader>
@@ -752,6 +798,16 @@ function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterActive, setFilterActive] = useState("all"); // all, active, inactive
+
+  const userTimezoneMap = useMemo(() => {
+    const map = new Map();
+    users.forEach((item) => {
+      if (item?.email) {
+        map.set(item.email, item.schedule?.timezone || null);
+      }
+    });
+    return map;
+  }, [users]);
 
   const fetchAdminData = async (token) => {
     try {
@@ -1013,6 +1069,15 @@ function AdminDashboard() {
                       ? user.personalities.filter(p => p && typeof p === 'object' && p.value)
                       : [];
                     const schedule = user.schedule || {};
+                    const scheduleTimezone = schedule.timezone;
+                    const scheduleTimeLabel = formatScheduleTime(
+                      schedule.times?.[0] || schedule.time || "",
+                      scheduleTimezone,
+                    );
+                    const hasScheduleTime = scheduleTimeLabel && scheduleTimeLabel !== "Not set";
+                    const displayTimezone = getDisplayTimezone(scheduleTimezone);
+                    const cardStatusLabel = schedule.paused ? "Paused" : user.active ? "Active" : "Inactive";
+                    const cardStatusColor = schedule.paused ? "bg-yellow-400" : user.active ? "bg-green-500" : "bg-gray-400";
                     
                     // Get personality display string safely
                     const personalityDisplay = personalities.length > 0 
@@ -1025,10 +1090,13 @@ function AdminDashboard() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <p className="font-semibold">{user.name || 'Unknown User'}</p>
-                              <div className={`h-2 w-2 rounded-full ${user.active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            <div className={`h-2 w-2 rounded-full ${cardStatusColor}`} />
                             </div>
                             <p className="text-sm text-muted-foreground">{user.email}</p>
                             <div className="mt-2 space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              🛰️ Status: <span className="font-semibold text-gray-800">{cardStatusLabel}</span>
+                            </p>
                               <p className="text-xs text-muted-foreground">
                                 🎯 Goals: {user.goals ? user.goals.substring(0, 60) + '...' : 'Not set'}
                               </p>
@@ -1036,18 +1104,19 @@ function AdminDashboard() {
                                 🎭 Personalities: {personalityDisplay}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                📅 Schedule: <span className="font-semibold text-indigo-600">{schedule.frequency || 'Not set'}</span> at <span className="font-semibold text-indigo-600">{schedule.times?.[0] || 'N/A'}</span>
+                                📅 Schedule:{" "}
+                                <span className="font-semibold text-indigo-600">
+                                  {schedule.frequency || "Not set"}
+                                </span>
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                🌍 Timezone: <span className="font-semibold text-blue-600">{schedule.timezone || 'UTC'}</span>
-                                {schedule.timezone && (
+                                🌍 Local send time:{" "}
+                                <span className="font-semibold text-blue-600">
+                                  {hasScheduleTime ? scheduleTimeLabel : "Not set"}
+                                </span>
+                                {hasScheduleTime && displayTimezone && (
                                   <span className="ml-2 text-xs text-gray-500">
-                                    (Local: {new Date().toLocaleTimeString('en-US', { 
-                                      timeZone: schedule.timezone, 
-                                      hour: '2-digit', 
-                                      minute: '2-digit',
-                                      hour12: true 
-                                    })})
+                                    ({displayTimezone})
                                   </span>
                                 )}
                               </p>
@@ -1093,27 +1162,33 @@ function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {logs.map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{log.email}</p>
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {log.status}
-                          </span>
+                  {logs.map((log) => {
+                    const logTimezone = log.timezone || userTimezoneMap.get(log.email);
+                    const timestamp = log.local_sent_at || log.sent_at;
+                    return (
+                      <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{log.email}</p>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {log.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{log.subject}</p>
+                          {log.error_message && (
+                            <p className="text-xs text-red-600 mt-1">Error: {log.error_message}</p>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{log.subject}</p>
-                        {log.error_message && (
-                          <p className="text-xs text-red-600 mt-1">Error: {log.error_message}</p>
-                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {formatDateTimeForTimezone(timestamp, logTimezone, {
+                            includeZone: Boolean(logTimezone),
+                          })}
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(log.sent_at).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {logs.length === 0 && (
                     <p className="text-center text-muted-foreground py-8">No logs found</p>
                   )}
@@ -1153,7 +1228,11 @@ function AdminDashboard() {
                           )}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(feedback.created_at).toLocaleString()}
+                          {formatDateTimeForTimezone(
+                            feedback.created_at,
+                            userTimezoneMap.get(feedback.email),
+                            { includeZone: true },
+                          )}
                         </span>
                       </div>
                     </div>

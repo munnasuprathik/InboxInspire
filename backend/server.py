@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional, Literal, Dict, Any
+from typing import List, Optional, Literal, Dict, Any, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -26,6 +26,8 @@ from version_tracker import VersionTracker
 import warnings
 from contextlib import asynccontextmanager
 from functools import lru_cache
+import re
+import html
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -70,6 +72,349 @@ TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 # Cache for personality voice descriptions
 personality_voice_cache: Dict[str, str] = {}
+
+message_types = [
+    "motivational_story",
+    "action_challenge",
+    "mindset_shift",
+    "accountability_prompt",
+    "celebration_message",
+    "real_world_example"
+]
+
+PERSONALITY_BLUEPRINTS: Dict[str, List[str]] = {
+    "famous": [
+        "Open with a quick scene that person would comment on, deliver an unexpected insight in their voice, finish with a decisive micro-challenge.",
+        "Share a short true-to-life anecdote the person would tell, highlight the lesson in their trademark style, close with an energizing promise."
+    ],
+    "tone": [
+        "Begin with an emotion check-in that matches the tone, offer one vivid image, end with a grounded next step.",
+        "Start with empathy, transition into a clear observation, and close with a gentle but firm call to action."
+    ],
+    "custom": [
+        "Start with a heartfelt acknowledgement, reinforce their values with a fresh metaphor, end with a conversational nudge.",
+        "Kick off with an encouraging statement, weave in a relatable micro-story, wrap up with one specific challenge."
+    ]
+}
+
+EMOTIONAL_ARCS = [
+    "Spark curiosity → Reflect on their journey → Deliver a laser-focused action.",
+    "Recognize a recent win → Surface a friction point → Offer a bold reframe.",
+    "Empathize with their current pace → Introduce a surprising observation → Issue a confident next move."
+]
+
+ANALOGY_PROMPTS = [
+    "Connect their current sprint to an unexpected domain such as jazz improvisation, space exploration, or world-class cuisine.",
+    "Compare their progress to a craftsperson honing a single stroke - keep it vivid but concise.",
+    "Use a metaphor from sports or art that aligns with their goals, but do not mention the word metaphor."
+]
+
+FRIENDLY_DARES = [
+    "When you complete today's action, reply with a single-word headline for the feeling.",
+    "Shoot back two words tonight: one win, one obstacle.",
+    "Drop me a note with the headline of your day once you execute.",
+    "When you're done, tell me the song that was playing in your head."
+]
+
+EMOJI_REGEX = re.compile(
+    "["
+    "\U0001F300-\U0001F6FF"
+    "\U0001F700-\U0001F77F"
+    "\U0001F780-\U0001F7FF"
+    "\U0001F800-\U0001F8FF"
+    "\U0001F900-\U0001F9FF"
+    "\U0001FA00-\U0001FAFF"
+    "\U00002600-\U000026FF"
+    "\U00002700-\U000027BF"
+    "\U0001F1E6-\U0001F1FF"
+    "]+"
+)
+
+
+def strip_emojis(text: Optional[str]) -> Optional[str]:
+    if text is None:
+        return None
+    return EMOJI_REGEX.sub("", text)
+
+
+def extract_interactive_sections(message: str) -> tuple[str, List[str], List[str]]:
+    """Split the LLM output into core message, interactive questions, and quick reply prompts."""
+    header = "INTERACTIVE CHECK-IN:"
+    quick_header = "QUICK REPLY PROMPT:"
+
+    core_message = message
+    check_in_lines: List[str] = []
+    quick_reply_lines: List[str] = []
+
+    if header in message:
+        core_message, remainder = message.split(header, 1)
+        core_message = core_message.strip()
+        remainder = remainder.strip()
+
+        if quick_header in remainder:
+            check_in_block, quick_block = remainder.split(quick_header, 1)
+        else:
+            check_in_block, quick_block = remainder, ""
+
+        check_in_lines = [
+            strip_emojis(line.strip(" -*\t"))
+            for line in check_in_block.strip().splitlines()
+            if line.strip()
+        ]
+        quick_reply_lines = [
+            strip_emojis(line.strip(" -*\t"))
+            for line in quick_block.strip().splitlines()
+            if line.strip()
+        ]
+    else:
+        core_message = message.strip()
+
+    return core_message, check_in_lines, quick_reply_lines
+
+
+def resolve_streak_badge(streak_count: int) -> tuple[str, str]:
+    """Return streak icon label and message without emojis."""
+    if streak_count >= 100:
+        return "[LEGEND]", f"{streak_count} Days - Legendary Consistency"
+    if streak_count >= 30:
+        return "[ELITE]", f"{streak_count} Days - Elite Momentum"
+    if streak_count >= 7:
+        return "[FOCUS]", f"{streak_count} Days - Locked In"
+    if streak_count == 1:
+        return "[DAY 1]", "Day 1 - Let's Build This"
+    if streak_count == 0:
+        return "[RESET]", "Fresh Start Today"
+    return "[STREAK]", f"{streak_count} Day Streak"
+
+
+def _render_list_items(lines: List[str]) -> str:
+    if not lines:
+        return ""
+    items = "".join(f"<li>{html.escape(line)}</li>" for line in lines)
+    return f"<ul>{items}</ul>"
+
+
+def generate_interactive_defaults(streak_count: int, goals: str) -> tuple[List[str], List[str]]:
+    import random
+
+    theme = derive_goal_theme(goals) or (goals.splitlines()[0][:50] if goals else "today")
+    theme = theme.strip().rstrip(".") or "today"
+
+    check_templates = [
+        f"What small win moves {theme.lower()} forward before the day ends?",
+        f"Which move will keep your momentum alive on {theme.lower()}?",
+        f"What must happen next so {theme.lower()} doesn't stall?",
+    ]
+
+    reply_templates = [
+        "Reply with the first action you'll take in the next hour.",
+        "Send back the single task you'll finish tonight.",
+        "Share the exact move you'll start as soon as you close this email.",
+    ]
+
+    check_line = random.choice(check_templates)
+    reply_line = random.choice(reply_templates)
+
+    if streak_count and "streak" not in check_line.lower():
+        check_line = f"Day {streak_count}: {check_line}"
+
+    return [check_line], [reply_line]
+
+
+def render_email_html(
+    streak_count: int,
+    streak_icon: str,
+    streak_message: str,
+    core_message: str,
+    check_in_lines: List[str],
+    quick_reply_lines: List[str],
+) -> str:
+    """Return a clean and concise HTML email body."""
+    safe_core = html.escape(core_message).replace("\n", "<br />")
+    check_in_block = _render_list_items(check_in_lines)
+    quick_reply_block = _render_list_items(quick_reply_lines)
+
+    return f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 0; color: #1f2933; }}
+            .wrapper {{ max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; padding: 28px 32px; box-shadow: 0 12px 30px rgba(40,52,71,0.08); }}
+            .streak {{ font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: #516070; margin-bottom: 20px; }}
+            .streak strong {{ color: #1b3a61; }}
+            .message {{ font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; }}
+            .panel {{ border-top: 1px solid #e4e8f0; padding-top: 20px; margin-top: 12px; }}
+            .panel-title {{ font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #394966; margin: 0 0 10px 0; }}
+            .panel ul {{ margin: 0; padding-left: 18px; color: #1f2933; font-size: 15px; line-height: 1.5; }}
+            .panel ul li {{ margin-bottom: 8px; }}
+            .signature {{ margin-top: 28px; font-size: 13px; color: #5a687d; }}
+            .footer {{ margin-top: 28px; font-size: 11px; color: #8b97aa; text-align: center; }}
+            @media (max-width: 520px) {{ .wrapper {{ padding: 24px; }} }}
+        </style>
+    </head>
+    <body>
+        <div class="wrapper">
+            <p class="streak"><strong>{html.escape(streak_icon)}</strong> {html.escape(streak_message)} · {streak_count} day{'s' if streak_count != 1 else ''}</p>
+            <div class="message">{safe_core}</div>
+            <div class="panel">
+                <p class="panel-title">Interactive Check-In</p>
+                {check_in_block or "<p style='margin:0;color:#3d4a5c;'>Share what today looks like.</p>"}
+            </div>
+            <div class="panel">
+                <p class="panel-title">Quick Reply Prompt</p>
+                {quick_reply_block or "<p style='margin:0;color:#3d4a5c;'>Reply with the first action you'll take next.</p>"}
+            </div>
+            <div class="signature">
+                <span>With you in this,</span>
+                <span>InboxInspire Coach</span>
+            </div>
+            <div class="footer">
+                You are receiving this email because you subscribed to InboxInspire updates.
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+
+def fallback_subject_line(streak: int, goals: str) -> str:
+    """Deterministic fallback subject when the LLM is unavailable."""
+    options = [
+        "Fresh spark for your next win",
+        "Your momentum note for today",
+        "A quick ignition for progress",
+        "Plan the move before the day ends",
+        "Clear the runway and launch",
+    ]
+
+    if streak > 0:
+        options.extend(
+            [
+                f"Day {streak} and climbing higher",
+                f"{streak} days in - keep the cadence",
+                f"{streak} mornings of moving forward",
+            ]
+        )
+
+    goal_theme = derive_goal_theme(goals)
+    if goal_theme:
+        options.extend(
+            [
+                f"Shape the next move on {goal_theme}",
+                f"Sketch the blueprint for {goal_theme}",
+                "Sharpen the idea before it sleeps",
+                "Draft the next chapter of the vision",
+            ]
+        )
+
+    return secrets.choice(options)[:60]
+
+
+def derive_goal_theme(goals: str) -> str:
+    """Extract a short, rephrased theme from the user's goals."""
+    if not goals:
+        return ""
+
+    primary_line = ""
+    for line in goals.splitlines():
+        cleaned = line.strip()
+        if cleaned:
+            primary_line = cleaned
+            break
+
+    if not primary_line:
+        return ""
+
+    lowered = primary_line.lower()
+    for phrase in [
+        "i want to",
+        "i need to",
+        "i'm going to",
+        "i will",
+        "my goal is to",
+        "my goal is",
+        "the goal is to",
+        "goal:",
+        "goal is to",
+    ]:
+        if lowered.startswith(phrase):
+            primary_line = primary_line[len(phrase) :].strip()
+            break
+
+    primary_line = re.sub(r"\b(my|our|i|me|mine)\b", "", primary_line, flags=re.IGNORECASE).strip()
+    primary_line = re.sub(r"\s{2,}", " ", primary_line)
+    return primary_line[:80]
+
+
+def cleanup_message_text(message: str) -> str:
+    """Remove boilerplate lines and keep the message concise."""
+    if not message:
+        return ""
+
+    filtered_lines = []
+    for raw_line in message.splitlines():
+        line = raw_line.strip()
+        if not line:
+            filtered_lines.append("")
+            continue
+        if "this line was generated by ai" in line.lower():
+            continue
+        filtered_lines.append(line)
+
+    collapsed = []
+    previous_blank = False
+    for line in filtered_lines:
+        if line == "":
+            if not previous_blank:
+                collapsed.append("")
+            previous_blank = True
+        else:
+            collapsed.append(line)
+            previous_blank = False
+
+    text = "\n".join(collapsed).strip()
+    if not text:
+        return ""
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paragraphs) > 3:
+        paragraphs = paragraphs[:3]
+    return "\n\n".join(paragraphs)
+
+
+async def record_email_log(
+    email: str,
+    subject: str,
+    status: str,
+    *,
+    sent_dt: Optional[datetime] = None,
+    timezone_value: Optional[str] = None,
+    error_message: Optional[str] = None,
+) -> None:
+    if sent_dt is None:
+        sent_dt = datetime.now(timezone.utc)
+
+    tz_name = None
+    local_sent_at = None
+    if timezone_value:
+        try:
+            tz_obj = pytz.timezone(timezone_value)
+            tz_name = timezone_value
+            local_sent_at = sent_dt.astimezone(tz_obj).isoformat()
+        except Exception:
+            tz_name = None
+            local_sent_at = None
+
+    log_doc = EmailLog(
+        email=email,
+        subject=subject,
+        status=status,
+        error_message=error_message,
+        sent_at=sent_dt,
+        timezone=tz_name,
+        local_sent_at=local_sent_at,
+    )
+    await db.email_logs.insert_one(log_doc.model_dump())
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -160,6 +505,7 @@ class MessageFeedbackCreate(BaseModel):
     message_id: Optional[str] = None
     rating: int
     feedback_text: Optional[str] = None
+    personality: Optional[PersonalityType] = None
 
 class UserSession(BaseModel):
     user_id: str
@@ -176,6 +522,7 @@ class MessageHistory(BaseModel):
     personality: PersonalityType
     sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     rating: Optional[int] = None
+    used_fallback: Optional[bool] = False
 
 class UserAnalytics(BaseModel):
     email: str
@@ -194,6 +541,7 @@ class MessageGenRequest(BaseModel):
 
 class MessageGenResponse(BaseModel):
     message: str
+    used_fallback: bool = False
 
 class EmailLog(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -204,6 +552,8 @@ class EmailLog(BaseModel):
     status: str
     error_message: Optional[str] = None
     sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timezone: Optional[str] = None
+    local_sent_at: Optional[str] = None
 
 # Admin auth
 def verify_admin(authorization: str = Header(None)):
@@ -213,6 +563,8 @@ def verify_admin(authorization: str = Header(None)):
 
 # SMTP Email Service with connection timeout
 async def send_email(to_email: str, subject: str, html_content: str) -> tuple[bool, Optional[str]]:
+    subject_line = None
+    sent_dt = None
     try:
         msg = MIMEMultipart('alternative')
         msg['From'] = os.getenv('SENDER_EMAIL')
@@ -232,27 +584,10 @@ async def send_email(to_email: str, subject: str, html_content: str) -> tuple[bo
             timeout=10  # 10 second timeout
         )
         
-        # Log successful email
-        log = EmailLog(
-            email=to_email,
-            subject=subject,
-            status="success"
-        )
-        await db.email_logs.insert_one(log.model_dump())
-        
         return True, None
     except Exception as e:
         error_msg = str(e)
         logging.error(f"Email send error: {error_msg}")
-        
-        # Log failed email
-        log = EmailLog(
-            email=to_email,
-            subject=subject,
-            status="failed",
-            error_message=error_msg
-        )
-        await db.email_logs.insert_one(log.model_dump())
         
         return False, error_msg
 
@@ -263,19 +598,9 @@ async def generate_unique_motivational_message(
     name: Optional[str] = None,
     streak_count: int = 0,
     previous_messages: list = None
-) -> tuple[str, str]:
+) -> tuple[str, str, bool, Optional[str]]:
     """Generate UNIQUE, engaging motivational message with questions - never repeat"""
     try:
-        # Message types for variety
-        message_types = [
-            "motivational_story",
-            "action_challenge", 
-            "mindset_shift",
-            "accountability_prompt",
-            "celebration_message",
-            "real_world_example"
-        ]
-        
         # Get previous message types to avoid repetition
         recent_types = []
         if previous_messages:
@@ -288,16 +613,22 @@ async def generate_unique_motivational_message(
         
         import random
         message_type = random.choice(available_types)
-        
+        blueprint_pool = PERSONALITY_BLUEPRINTS.get(personality.type, PERSONALITY_BLUEPRINTS["custom"])
+        blueprint = random.choice(blueprint_pool)
+        emotional_arc = random.choice(EMOTIONAL_ARCS)
+        recent_themes_block = build_recent_themes(previous_messages)
+        include_analogy = random.random() < 0.6
+        analogy_instruction = random.choice(ANALOGY_PROMPTS) if include_analogy else ""
+        dare_instruction = random.choice(FRIENDLY_DARES) if random.random() < 0.5 else ""
         # Personality style via research
         voice_profile = await fetch_personality_voice(personality)
         if voice_profile:
             personality_prompt = f"""VOICE PROFILE:
-{voice_profile}
-RULES:
-- Write exactly in this voice.
-- Do not mention these notes, the personality name, or that you researched it.
-- Use natural, human language—no AI phrasing."""
+    {voice_profile}
+    RULES:
+    - Write exactly in this voice.
+    - Do not mention these notes, the personality name, or that you researched it.
+    - Use natural, human language - no AI phrasing."""
         else:
             fallback_voice = personality.value if personality.value else "warm, encouraging mentor"
             personality_prompt = f"""VOICE PROFILE:
@@ -306,56 +637,72 @@ RULES:
 - Capture their energy and mannerisms authentically.
 - Do not say you are copying anyone or mention tone explicitly.
 - Keep the language human and grounded."""
-
-        # Engaging questions pool
-        question_templates = [
-            "What's one small action you can take RIGHT NOW toward this?",
-            "If you had to pick just ONE thing to focus on today, what would move the needle?",
-            "What's the biggest obstacle in your way, and how can you sidestep it?",
-            "Imagine it's 6 months from now and you've succeeded - what did you do differently?",
-            "What would you tell someone else in your position right now?",
-            "What's one excuse you're going to eliminate today?",
-            "Which part of your goal actually excites you the most?",
-            "What's a micro-win you can celebrate from yesterday?",
-            "If you could ask your future successful self one question, what would it be?",
-            "What's one thing you know you should do but keep avoiding?"
-        ]
-        
-        question = random.choice(question_templates)
         
         # Streak milestone messages
         streak_context = ""
         if streak_count >= 100:
-            streak_context = f"🎯 INCREDIBLE! {streak_count} days of consistency. You're in the top 1%."
+            streak_context = f"[LEGEND] {streak_count} days of consistency. You're in the top 1%."
         elif streak_count >= 30:
-            streak_context = f"🔥 {streak_count} day streak! You've built a real habit here."
+            streak_context = f"[ELITE] {streak_count} day streak! You've built a real habit here."
         elif streak_count >= 7:
-            streak_context = f"💪 {streak_count} days strong! The hardest part is behind you."
+            streak_context = f"[STRONG] {streak_count} days locked in. The hardest part is behind you."
         elif streak_count >= 1:
-            streak_context = f"✨ Day {streak_count}. Every journey starts with a single step."
+            streak_context = f"[DAY {streak_count}] Every journey starts with a single step."
         else:
-            streak_context = "🚀 Starting fresh. Let's build momentum!"
+            streak_context = "[LAUNCH] Starting fresh. Let's build momentum."
         
         research_snippet = await fetch_research_snippet(goals, personality)
         insights_block = f"RESEARCH INSIGHT: {research_snippet}\n" if research_snippet else ""
 
+        latest_message_snippet = ""
+        if previous_messages:
+            latest_raw = previous_messages[0].get("message", "").strip()
+            if latest_raw:
+                latest_message_snippet = latest_raw.split("\n")[0][:220]
+            latest_persona = previous_messages[0].get("personality", {}).get("value")
+        else:
+            latest_persona = None
+        
         prompt = f"""You are an elite personal coach creating a UNIQUE daily motivation message.
 
 {personality_prompt}
 
 USER'S GOALS: {goals}
-USER'S NAME: {name or "there"}
-STREAK: {streak_context}
+STREAK COUNT: {streak_count}
+PERSONALITY MODE: {personality.type}
+PERSONALITY VALUE: {personality.value}
+LAST PERSONA USED: {latest_persona or "unknown"}
+LATEST MESSAGE SAMPLE: {latest_message_snippet or "None"}
+STREAK CONTEXT: {streak_context}
 MESSAGE TYPE: {message_type}
 {insights_block}
+STORY BLUEPRINT: {blueprint}
+EMOTIONAL ARC: {emotional_arc}
+{("RECENT THEMES TO AVOID:\n" + recent_themes_block) if recent_themes_block else ""}
+{analogy_instruction}
 
 CRITICAL RULES:
 1. NEVER copy/paste the user's goals - reference them creatively and naturally
 2. Make it COMPLETELY UNIQUE - no generic phrases
 3. Be SPECIFIC and ACTIONABLE - not vague platitudes
-4. Keep it SHORT - 3-4 paragraphs maximum
-5. Make it CONVERSATIONAL - like texting a friend who cares
-6. If a research insight is provided, weave it naturally into the story without sounding like a summary or citing the source
+4. Keep it tight - no more than TWO short paragraphs and one single-sentence closing action line.
+5. Make it CONVERSATIONAL - like texting a friend who cares.
+6. If a research insight is provided, weave it naturally into the story without sounding like a summary or citing the source.
+7. Do not repeat ideas from recent themes. Never mention that you are avoiding repetition.
+8. Vary sentence length - mix short punchy lines with longer flowing ones.
+9. Sound undeniably human; use tactile details and sensory language.
+10. Close with a crystal-clear micro action. {("Then add: " + dare_instruction) if dare_instruction else ""}
+11. Do NOT use emojis, emoticons, or Unicode pictographs; rely on plain words or ASCII icons (e.g. [*], ->) for emphasis.
+12. After the core message, create a section formatted exactly like this:
+
+INTERACTIVE CHECK-IN:
+- Provide exactly one bullet beginning with "- " that asks a thoughtful question or challenge tied to the goals and streak.
+
+QUICK REPLY PROMPT:
+- Provide exactly one bullet beginning with "- " that gives a precise reply instruction (actionable and time-bound).
+
+Make both bullets unique to this user and today's message.
+
 
 MESSAGE TYPE GUIDELINES:
 - motivational_story: Share a brief, real example of someone who overcame similar challenges
@@ -376,7 +723,7 @@ Write an authentic, powerful message that feels personal and impossible to ignor
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a world-class motivational coach who creates deeply personal, unique messages that inspire real action. You never use clichés, never repeat yourself, and you always sound human—not like an AI summarizer. Every message feels handcrafted."},
+                {"role": "system", "content": "You are a world-class motivational coach who creates deeply personal, unique messages that inspire real action. You never use cliches, never repeat yourself, and you always sound human - not like an AI summarizer. Every message feels handcrafted."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.9,  # Higher for more creativity
@@ -385,22 +732,42 @@ Write an authentic, powerful message that feels personal and impossible to ignor
             frequency_penalty=0.6   # Encourage variety
         )
         
-        message = response.choices[0].message.content.strip()
+        message = strip_emojis(response.choices[0].message.content.strip())
+        message = cleanup_message_text(message)
         
-        # Add engaging question at the end
-        message_with_question = f"{message}\n\n💭 Question for you: {question}"
-        
-        return message_with_question, message_type
+        return message, message_type, False, research_snippet
         
     except Exception as e:
         logger.error(f"Error generating message: {str(e)}")
-        default_msg = f"Hey {name or 'there'}! 🔥 Day {streak_count} of your journey.\n\nYou know what you need to do today. The question isn't whether you CAN do it - it's whether you WILL.\n\nWhat's one action you're taking today that your future self will thank you for?"
-        return default_msg, "default"
+        try:
+            await tracker.log_system_event(
+                event_type="llm_generation_failed",
+                event_category="llm",
+                details={
+                    "personality": personality.value if personality else None,
+                    "error": str(e)
+                },
+                status="error"
+            )
+        except Exception:
+            pass
+        ci_defaults, qr_defaults = generate_interactive_defaults(streak_count, goals)
+        default_msg = (
+            f"Day {streak_count} of your journey.\n\n"
+            "You already know the lever that moves the day—choose it and commit.\n\n"
+            "INTERACTIVE CHECK-IN:\n"
+            + "\n".join(f"- {line}" for line in ci_defaults)
+            + "\n\nQUICK REPLY PROMPT:\n"
+            + "\n".join(f"- {line}" for line in qr_defaults)
+        )
+        default_msg = strip_emojis(default_msg)
+        default_msg = cleanup_message_text(default_msg)
+        return default_msg, "default", True, None
 
 # Backward compatibility wrapper
 async def generate_motivational_message(goals: str, personality: PersonalityType, name: Optional[str] = None) -> str:
     """Wrapper for backward compatibility"""
-    message, _ = await generate_unique_motivational_message(goals, personality, name, 0, [])
+    message, _, _, _ = await generate_unique_motivational_message(goals, personality, name, 0, [])
     return message
 
 # Get current personality for user based on rotation mode
@@ -426,6 +793,17 @@ async def fetch_research_snippet(goals: str, personality: PersonalityType) -> Op
     try:
         async with httpx.AsyncClient(timeout=6) as client:
             response = await client.post(TAVILY_SEARCH_URL, json=payload)
+            if response.status_code == 429:
+                try:
+                    await tracker.log_system_event(
+                        event_type="tavily_rate_limit",
+                        event_category="research",
+                        details={"query": query},
+                        status="warning"
+                    )
+                except Exception:
+                    pass
+                return None
             response.raise_for_status()
             data = response.json()
 
@@ -440,6 +818,15 @@ async def fetch_research_snippet(goals: str, personality: PersonalityType) -> Op
 
     except Exception as e:
         logger.warning(f"Tavily research failed: {e}")
+        try:
+            await tracker.log_system_event(
+                event_type="tavily_error",
+                event_category="research",
+                details={"query": query, "error": str(e)},
+                status="warning"
+            )
+        except Exception:
+            pass
 
     return None
 
@@ -479,6 +866,17 @@ async def fetch_personality_voice(personality: PersonalityType) -> Optional[str]
     try:
         async with httpx.AsyncClient(timeout=6) as client:
             response = await client.post(TAVILY_SEARCH_URL, json=payload)
+            if response.status_code == 429:
+                try:
+                    await tracker.log_system_event(
+                        event_type="tavily_rate_limit",
+                        event_category="research",
+                        details={"query": query},
+                        status="warning"
+                    )
+                except Exception:
+                    pass
+                return None
             response.raise_for_status()
             data = response.json()
 
@@ -493,8 +891,198 @@ async def fetch_personality_voice(personality: PersonalityType) -> Optional[str]
                 return trimmed
     except Exception as e:
         logger.warning(f"Tavily personality research failed: {e}")
+        try:
+            await tracker.log_system_event(
+                event_type="tavily_error",
+                event_category="research",
+                details={"query": query, "error": str(e)},
+                status="warning"
+            )
+        except Exception:
+            pass
 
     return None
+
+
+def build_recent_themes(previous_messages: List[dict]) -> str:
+    """Create a brief list of themes from previous emails to reduce repetition."""
+    if not previous_messages:
+        return ""
+
+    themes = []
+    for msg in previous_messages[:5]:
+        text = msg.get("message", "")
+        if not text:
+            continue
+        snippet = text.strip().split("\n")[0]
+        snippet = snippet[:140].rsplit(" ", 1)[0] if len(snippet) > 140 else snippet
+        message_type = msg.get("message_type")
+        if message_type:
+            themes.append(f"- ({message_type}) {snippet}")
+        else:
+            themes.append(f"- {snippet}")
+
+    return "\n".join(themes[:5])
+
+
+def build_subject_line(
+    personality: PersonalityType,
+    message_type: str,
+    user_data: dict,
+    research_snippet: Optional[str],
+    used_fallback: bool
+) -> str:
+    import random
+
+    streak = user_data.get("streak_count", 0)
+    raw_goal = user_data.get("goals") or ""
+    goal_line = raw_goal.split("\n")[0][:80]
+    goal_theme = derive_goal_theme(raw_goal)
+
+    momentum_words = [
+        "spark",
+        "stride",
+        "pulse",
+        "tempo",
+        "heartbeat",
+        "rhythm",
+        "signal",
+        "sparkline",
+    ]
+    action_words = [
+        "takes shape",
+        "moves forward",
+        "kicks off",
+        "gains traction",
+        "locks in",
+        "hits the runway",
+        "winds up",
+        "comes alive",
+    ]
+
+    goal_phrase = (goal_theme or goal_line or "").strip()
+    templates = [
+        f"Today's {random.choice(momentum_words)} {random.choice(action_words)}",
+        f"Keep the {random.choice(momentum_words)} moving",
+        f"{random.choice(momentum_words).capitalize()} fuels your next stride",
+        f"Plot the next {random.choice(momentum_words)} move",
+    ]
+
+    if goal_phrase:
+        trimmed_goal = goal_phrase[:50]
+        templates.extend(
+            [
+                f"{trimmed_goal} gets new {random.choice(momentum_words)}",
+                f"Steps toward {trimmed_goal} today",
+                f"Edge closer on {trimmed_goal}",
+            ]
+        )
+
+    if streak > 0:
+        templates.extend(
+            [
+                f"{streak} days in - stay on tempo",
+                f"{streak} mornings and momentum rising",
+            ]
+        )
+
+    if research_snippet:
+        snippet = research_snippet.strip().split(".")[0][:40]
+        templates.extend(
+            [
+                f"Insight to try: {snippet}",
+                f"Research spark: {snippet}",
+            ]
+        )
+
+    if used_fallback:
+        templates.extend(
+            [
+                "Momentum stays with you today",
+                "Another nudge is in your inbox",
+            ]
+        )
+
+    templates = [t for t in templates if t]
+    if not templates:
+        templates = ["Your daily momentum note"]
+
+    subject = random.choice(templates).strip()
+    return strip_emojis(subject)[:60]
+
+
+async def compose_subject_line(
+    personality: PersonalityType,
+    message_type: str,
+    user_data: dict,
+    used_fallback: bool,
+    research_snippet: Optional[str]
+) -> str:
+    goals = (user_data.get("goals") or "").strip()
+    goal_theme = derive_goal_theme(goals)
+    streak = user_data.get("streak_count", 0)
+    fallback_subject = fallback_subject_line(streak, goals)
+
+    try:
+        prompt = f"""
+You are crafting an email subject line for a motivational newsletter.
+
+REQUIREMENTS:
+- Keep it under 60 characters.
+- Do NOT mention any personality, persona, or tone names.
+- Make it fresh, human, and emotionally resonant.
+- Do NOT copy the user's goal wording; paraphrase or imply it instead.
+- Use the goal theme as a springboard but phrase it in new words.
+- Hint at today's message theme without sounding clickbait or repeating prior subjects.
+- If a streak count exists, acknowledge progress without repeating the word "streak".
+- If a research insight is provided, allude to it without sounding academic.
+
+INPUTS:
+- Streak count: {streak}
+- Message type: {message_type}
+- Goal theme: {goal_theme or "None supplied"}
+- Research snippet: {research_snippet or "None"}
+- Previous fallback used: {"Yes" if used_fallback else "No"}
+
+Return only the subject line."""  # noqa: E501
+
+        response = await openai_client.responses.create(
+            model="gpt-4.1-mini",
+            input=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You write vivid, human email subject lines for a motivational product. "
+                        "They feel handcrafted, avoid gimmicks, refuse cliches, and never mention tone/persona names."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.75,
+            max_output_tokens=24,
+        )
+
+        subject = response.output_text.strip().strip('"\'')
+        subject = strip_emojis(subject)
+        return subject if subject else fallback_subject
+
+    except Exception as e:
+        logger.warning(f"Subject line generation failed: {e}")
+        try:
+            await tracker.log_system_event(
+                event_type="subject_generation_failed",
+                event_category="llm",
+                details={
+                    "user_email": user_data.get("email"),
+                    "message_type": message_type,
+                    "error": str(e),
+                },
+                status="warning",
+            )
+        except Exception:
+            pass
+
+        return fallback_subject
 
 
 def get_current_personality(user_data):
@@ -575,6 +1163,9 @@ async def update_streak(email: str):
 # Send email to a SPECIFIC user (called by scheduler)
 async def send_motivation_to_user(email: str):
     """Send motivation email to a specific user - called by their scheduled job"""
+    subject_line: Optional[str] = None
+    sent_dt: Optional[datetime] = None
+    schedule: Optional[dict] = None
     try:
         # Get the specific user
         user_data = await db.users.find_one({"email": email, "active": True}, {"_id": 0})
@@ -615,7 +1206,7 @@ async def send_motivation_to_user(email: str):
         ).sort("created_at", -1).limit(10).to_list(10)
         
         # Generate UNIQUE message with questions
-        message, message_type = await generate_unique_motivational_message(
+        message, message_type, used_fallback, research_snippet = await generate_unique_motivational_message(
             user_data['goals'],
             personality,
             user_data.get('name'),
@@ -623,102 +1214,65 @@ async def send_motivation_to_user(email: str):
             previous_messages
         )
         
+        if used_fallback:
+            try:
+                await tracker.log_system_event(
+                    event_type="llm_generation_fallback",
+                    event_category="llm",
+                    details={
+                        "user_email": email,
+                        "personality": personality.value if personality else None
+                    },
+                    status="warning"
+                )
+            except Exception:
+                pass
+        
         # Save to message history with message type for tracking
         message_id = str(uuid.uuid4())
+        sent_dt = datetime.now(timezone.utc)
+        sent_timestamp = sent_dt.isoformat()
         history_doc = {
             "id": message_id,
             "email": email,
             "message": message,
             "personality": personality.model_dump(),
             "message_type": message_type,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "streak_at_time": user_data.get('streak_count', 0)
+            "created_at": sent_timestamp,
+            "sent_at": sent_timestamp,
+            "streak_at_time": user_data.get('streak_count', 0),
+            "used_fallback": used_fallback
         }
         await db.message_history.insert_one(history_doc)
         
-        # Streak milestone message
         streak_count = user_data.get('streak_count', 0)
-        streak_emoji = "🔥"
-        streak_message = f"{streak_count} Day Streak"
-        
-        if streak_count >= 100:
-            streak_emoji = "🏆"
-            streak_message = f"{streak_count} DAYS! LEGENDARY!"
-        elif streak_count >= 30:
-            streak_emoji = "💎"
-            streak_message = f"{streak_count} Days - Elite Level!"
-        elif streak_count >= 7:
-            streak_emoji = "🔥"
-            streak_message = f"{streak_count} Days - On Fire!"
-        elif streak_count == 1:
-            streak_emoji = "✨"
-            streak_message = "Day 1 - Let's Go!"
-        
-        # Create HTML email with engaging design
-        html_content = f"""
-        <html>
-        <head>
-            <style>
-                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif; line-height: 1.6; color: #1a202c; margin: 0; padding: 0; background: #f7fafc; }}
-                .container {{ max-width: 600px; margin: 20px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; }}
-                .header h1 {{ color: white; margin: 0 0 10px 0; font-size: 26px; font-weight: 700; }}
-                .streak-badge {{ display: inline-block; background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 20px; color: white; font-size: 14px; font-weight: 600; }}
-                .content {{ padding: 40px 30px; }}
-                .greeting {{ font-size: 20px; color: #2d3748; margin-bottom: 25px; font-weight: 500; }}
-                .streak-display {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 20px; border-radius: 12px; text-align: center; margin: 25px 0; color: white; }}
-                .streak-display .emoji {{ font-size: 40px; margin-bottom: 5px; }}
-                .streak-display .count {{ font-size: 32px; font-weight: 800; margin: 5px 0; }}
-                .streak-display .label {{ font-size: 14px; opacity: 0.95; }}
-                .message {{ font-size: 16px; line-height: 1.8; color: #2d3748; margin: 25px 0; white-space: pre-wrap; }}
-                .question-box {{ background: #edf2f7; padding: 20px; border-radius: 10px; border-left: 4px solid #667eea; margin: 25px 0; }}
-                .question-box .icon {{ font-size: 20px; margin-bottom: 8px; }}
-                .question-box .text {{ font-size: 16px; color: #2d3748; font-weight: 500; line-height: 1.5; }}
-                .signature {{ margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; font-style: italic; color: #718096; font-size: 14px; }}
-                .reply-prompt {{ background: #667eea; color: white; padding: 15px; border-radius: 8px; text-align: center; margin: 25px 0; font-size: 14px; }}
-                .reply-prompt a {{ color: white; text-decoration: none; font-weight: 600; }}
-                .footer {{ text-align: center; padding: 20px; color: #a0aec0; font-size: 12px; background: #f7fafc; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>✨ Your Daily Motivation</h1>
-                    <div class="streak-badge">{streak_emoji} {streak_message}</div>
-                </div>
-                <div class="content">
-                    <div class="greeting">Hey {user_data.get('name', 'there')}! 👋</div>
-                    
-                    <div class="streak-display">
-                        <div class="emoji">{streak_emoji}</div>
-                        <div class="count">{streak_count}</div>
-                        <div class="label">{'DAY' if streak_count == 1 else 'DAYS'} OF MOTIVATION</div>
-                    </div>
-                    
-                    <div class="message">{message}</div>
-                    
-                    <div class="reply-prompt">
-                        💬 <strong>Hit reply</strong> and share your thoughts - I read every response!
-                    </div>
-                    
-                    <div class="signature">
-                        Inspired by {personality.value} • InboxInspire
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>You're receiving this because you subscribed to InboxInspire</p>
-                    <p>Keep pushing towards your goals!</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        success, error = await send_email(
-            email,
-            f"Your Daily Motivation from {personality.value} ✨",
-            html_content
+        streak_icon, streak_message = resolve_streak_badge(streak_count)
+        core_message, check_in_lines, quick_reply_lines = extract_interactive_sections(message)
+        ci_defaults, qr_defaults = generate_interactive_defaults(
+            streak_count,
+            user_data.get('goals', ''),
         )
+        check_in_lines = check_in_lines or ci_defaults
+        quick_reply_lines = quick_reply_lines or qr_defaults
+
+        html_content = render_email_html(
+            streak_count=streak_count,
+            streak_icon=streak_icon,
+            streak_message=streak_message,
+            core_message=core_message,
+            check_in_lines=check_in_lines,
+            quick_reply_lines=quick_reply_lines,
+        )
+
+        subject_line = await compose_subject_line(
+            personality,
+            message_type,
+            user_data,
+            used_fallback,
+            research_snippet
+        )
+
+        success, error = await send_email(email, subject_line, html_content)
         
         if success:
             # Update last email sent time, streak, and total messages
@@ -734,8 +1288,8 @@ async def send_motivation_to_user(email: str):
                     {"email": email},
                     {
                         "$set": {
-                            "last_email_sent": datetime.now(timezone.utc).isoformat(),
-                            "last_active": datetime.now(timezone.utc).isoformat(),
+                            "last_email_sent": sent_timestamp,
+                            "last_active": sent_timestamp,
                             "current_personality_index": next_index
                         },
                         "$inc": {"total_messages_received": 1}
@@ -746,19 +1300,42 @@ async def send_motivation_to_user(email: str):
                     {"email": email},
                     {
                         "$set": {
-                            "last_email_sent": datetime.now(timezone.utc).isoformat(),
-                            "last_active": datetime.now(timezone.utc).isoformat()
+                            "last_email_sent": sent_timestamp,
+                            "last_active": sent_timestamp
                         },
                         "$inc": {"total_messages_received": 1}
                     }
                 )
             
+            await record_email_log(
+                email=email,
+                subject=subject_line,
+                status="success",
+                sent_dt=sent_dt,
+                timezone_value=schedule.get("timezone"),
+            )
             logger.info(f"✓ Sent motivation to {email}")
         else:
+            await record_email_log(
+                email=email,
+                subject=subject_line,
+                status="failed",
+                sent_dt=sent_dt,
+                timezone_value=schedule.get("timezone"),
+                error_message=error,
+            )
             logger.error(f"✗ Failed to send to {email}: {error}")
             
     except Exception as e:
         logger.error(f"Error sending to {email}: {str(e)}")
+        await record_email_log(
+            email=email,
+            subject=subject_line or "Motivation Delivery",
+            status="failed",
+            sent_dt=sent_dt,
+            timezone_value=schedule.get("timezone") if isinstance(schedule, dict) else None,
+            error_message=str(e),
+        )
 
 # Background job to send scheduled emails (DEPRECATED - keeping for backwards compatibility)
 async def send_scheduled_motivations():
@@ -830,7 +1407,7 @@ async def send_scheduled_motivations():
                             <p style="font-size: 18px; color: #4a5568; margin-bottom: 25px;">Hello {user_data.get('name', 'there')},</p>
                             
                             <div class="streak">
-                                <div>🔥 Your Streak</div>
+                                <div>[STREAK] Your Progress</div>
                                 <div class="streak-count">{user_data.get('streak_count', 0)} Days</div>
                             </div>
                             
@@ -850,7 +1427,7 @@ async def send_scheduled_motivations():
                 
                 success, error = await send_email(
                     user_data['email'],
-                    f"Your Daily Motivation from {personality.value} ✨",
+                    f"Your Daily Motivation from {personality.value}",
                     html_content
                 )
                 
@@ -974,7 +1551,7 @@ async def login(request: LoginRequest, background_tasks: BackgroundTasks, req: R
     """
     
     # Send email in background - immediate response to user
-    background_tasks.add_task(send_email, request.email, "Your InboxInspire Login Link 🔐", html_content)
+    background_tasks.add_task(send_email, request.email, "Your InboxInspire Login Link", html_content)
     
     return {"status": "success", "message": "Login link sent to your email", "user_exists": user_exists}
 
@@ -1138,12 +1715,14 @@ async def update_user(email: str, updates: UserProfileUpdate):
 
 @api_router.post("/generate-message")
 async def generate_message(request: MessageGenRequest):
-    message = await generate_motivational_message(
+    message, _, used_fallback, _ = await generate_unique_motivational_message(
         request.goals, 
         request.personality,
-        request.user_name
+        request.user_name,
+        0,
+        []
     )
-    return MessageGenResponse(message=message)
+    return MessageGenResponse(message=message, used_fallback=used_fallback)
 
 @api_router.post("/test-schedule/{email}")
 async def test_schedule(email: str):
@@ -1188,71 +1767,96 @@ async def send_motivation_now(email: str):
     if not personality:
         raise HTTPException(status_code=400, detail="No personality configured")
     
-    message = await generate_motivational_message(
+    message, message_type, used_fallback, research_snippet = await generate_unique_motivational_message(
         user['goals'],
         personality,
-        user.get('name')
+        user.get('name'),
+        user.get('streak_count', 0),
+        []
     )
+    if used_fallback:
+        try:
+            await tracker.log_system_event(
+                event_type="llm_generation_fallback",
+                event_category="llm",
+                details={
+                    "user_email": email,
+                    "personality": personality.value if personality else None
+                },
+                status="warning"
+            )
+        except Exception:
+            pass
     
     # Save to history
     message_id = str(uuid.uuid4())
+    sent_dt = datetime.now(timezone.utc)
     history = MessageHistory(
         id=message_id,
         email=email,
         message=message,
-        personality=personality
-    )
-    await db.message_history.insert_one(history.model_dump())
+        personality=personality,
+        used_fallback=used_fallback,
+        sent_at=sent_dt
+    ).model_dump()
+    history["message_type"] = message_type
+    history["created_at"] = history.get("sent_at")
+    await db.message_history.insert_one(history)
     
-    html_content = f"""
-    <html>
-    <head>
-        <style>
-            body {{ font-family: 'Georgia', serif; line-height: 1.8; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; }}
-            .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center; }}
-            .header h1 {{ color: white; margin: 0; font-size: 28px; font-weight: 600; }}
-            .content {{ background: #ffffff; padding: 40px 30px; }}
-            .message {{ font-size: 16px; line-height: 1.8; color: #2d3748; white-space: pre-wrap; }}
-            .signature {{ margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; font-style: italic; color: #718096; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>Your Inspiration Awaits</h1>
-            </div>
-            <div class="content">
-                <p style="font-size: 18px; color: #4a5568; margin-bottom: 25px;">Hello {user.get('name', 'there')},</p>
-                <div class="message">{message}</div>
-                <div class="signature">
-                    - Inspired by {personality.value}
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    success, error = await send_email(
-        email,
-        f"Your Motivation from {personality.value} ✨",
-        html_content
+    streak_count = user.get('streak_count', 0)
+    streak_icon, streak_message = resolve_streak_badge(streak_count)
+    core_message, check_in_lines, quick_reply_lines = extract_interactive_sections(message)
+    ci_defaults, qr_defaults = generate_interactive_defaults(streak_count, user.get('goals', ''))
+    check_in_lines = check_in_lines or ci_defaults
+    quick_reply_lines = quick_reply_lines or qr_defaults
+
+    html_content = render_email_html(
+        streak_count=streak_count,
+        streak_icon=streak_icon,
+        streak_message=streak_message,
+        core_message=core_message,
+        check_in_lines=check_in_lines,
+        quick_reply_lines=quick_reply_lines,
     )
+    
+    subject_line = await compose_subject_line(
+        personality,
+        "instant_boost",
+        user,
+        used_fallback,
+        research_snippet=research_snippet
+    )
+
+    success, error = await send_email(email, subject_line, html_content)
     
     if success:
         await db.users.update_one(
             {"email": email},
             {
                 "$set": {
-                    "last_email_sent": datetime.now(timezone.utc).isoformat(),
-                    "last_active": datetime.now(timezone.utc).isoformat()
+                    "last_email_sent": sent_dt.isoformat(),
+                    "last_active": sent_dt.isoformat()
                 },
                 "$inc": {"total_messages_received": 1}
             }
         )
+        await record_email_log(
+            email=email,
+            subject=subject_line,
+            status="success",
+            sent_dt=sent_dt,
+            timezone_value=user.get("schedule", {}).get("timezone"),
+        )
         return {"status": "success", "message": "Email sent successfully", "message_id": message_id}
     else:
+        await record_email_log(
+            email=email,
+            subject=subject_line,
+            status="failed",
+            sent_dt=sent_dt,
+            timezone_value=user.get("schedule", {}).get("timezone"),
+            error_message=error,
+        )
         raise HTTPException(status_code=500, detail=f"Failed to send email: {error}")
 
 @api_router.get("/famous-personalities")
@@ -1297,8 +1901,19 @@ async def submit_feedback(email: str, feedback: MessageFeedbackCreate):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Get current personality
-    personality = get_current_personality(user)
+    message_personality = None
+    if feedback.message_id:
+        message_doc = await db.message_history.find_one(
+            {"id": feedback.message_id},
+            {"personality": 1},
+        )
+        if message_doc and message_doc.get("personality"):
+            try:
+                message_personality = PersonalityType(**message_doc["personality"])
+            except Exception:
+                message_personality = None
+
+    personality = feedback.personality or message_personality or get_current_personality(user)
     
     feedback_doc = MessageFeedback(
         email=email,
@@ -1312,9 +1927,12 @@ async def submit_feedback(email: str, feedback: MessageFeedbackCreate):
     
     # Update message history with rating
     if feedback.message_id:
+        update_fields = {"rating": feedback.rating}
+        if feedback.feedback_text:
+            update_fields["feedback_text"] = feedback.feedback_text
         await db.message_history.update_one(
             {"id": feedback.message_id},
-            {"$set": {"rating": feedback.rating}}
+            {"$set": update_fields}
         )
     
     # Update last active
@@ -1489,8 +2107,15 @@ async def admin_get_all_users():
 async def admin_get_email_logs(limit: int = 100):
     logs = await db.email_logs.find({}, {"_id": 0}).sort("sent_at", -1).to_list(limit)
     for log in logs:
-        if isinstance(log.get('sent_at'), str):
-            log['sent_at'] = datetime.fromisoformat(log['sent_at'])
+        sent_at = log.get('sent_at')
+        if isinstance(sent_at, datetime):
+            log['sent_at'] = sent_at.isoformat()
+        elif isinstance(sent_at, str):
+            # ensure ISO formatting
+            try:
+                log['sent_at'] = datetime.fromisoformat(sent_at).isoformat()
+            except Exception:
+                pass
     return {"logs": logs}
 
 @api_router.get("/admin/stats", dependencies=[Depends(verify_admin)])
@@ -1773,7 +2398,7 @@ async def create_email_job(user_email: str):
     """Scheduled job executed by AsyncIOScheduler within the main event loop."""
     try:
         await send_motivation_to_user(user_email)
-
+        
         await tracker.log_system_event(
             event_type="scheduled_email_sent",
             event_category="scheduler",

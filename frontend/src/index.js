@@ -4,6 +4,93 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import "@/index.css";
 import App from "@/App";
 
+// Hide noisy ResizeObserver errors in dev overlay
+if (typeof window !== "undefined") {
+  const resizeObserverLoopErrRe = /ResizeObserver loop completed with undelivered notifications./;
+  const resizeObserverLimitErrRe = /ResizeObserver loop limit exceeded/;
+
+  const suppressIfResizeObserver = (message) => {
+    if (!message) return false;
+    return resizeObserverLoopErrRe.test(message) || resizeObserverLimitErrRe.test(message);
+  };
+
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    if (args.length && typeof args[0] === "string" && resizeObserverLoopErrRe.test(args[0])) {
+      return;
+    }
+    originalConsoleError(...args);
+  };
+
+  const originalWindowError = window.onerror;
+  window.onerror = (message, source, lineno, colno, error) => {
+    if (suppressIfResizeObserver(message) || suppressIfResizeObserver(error?.message)) {
+      return true;
+    }
+    if (typeof originalWindowError === "function") {
+      return originalWindowError(message, source, lineno, colno, error);
+    }
+    return false;
+  };
+
+  window.addEventListener("error", (event) => {
+    if (resizeObserverLoopErrRe.test(event.message)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+    }
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    if (resizeObserverLimitErrRe.test(event.reason?.message || event.reason)) {
+      event.preventDefault();
+    }
+  });
+
+  const patchOverlay = () => {
+    const overlayHook = window.__REACT_ERROR_OVERLAY_GLOBAL_HOOK__;
+    if (overlayHook && typeof overlayHook.showOverlay === "function") {
+      const originalShowOverlay = overlayHook.showOverlay;
+      overlayHook.showOverlay = (arg) => {
+        const message =
+          arg?.message ||
+          arg?.error?.message ||
+          (typeof arg === "string" ? arg : "");
+        if (message && suppressIfResizeObserver(message)) {
+          return;
+        }
+        originalShowOverlay(arg);
+      };
+      return true;
+    }
+    return false;
+  };
+
+  if (!patchOverlay()) {
+    const overlayInterval = setInterval(() => {
+      if (patchOverlay()) {
+        clearInterval(overlayInterval);
+      }
+    }, 200);
+    window.addEventListener("load", () => {
+      if (patchOverlay()) {
+        clearInterval(overlayInterval);
+      }
+    });
+  }
+
+  const OriginalResizeObserver = window.ResizeObserver;
+  if (OriginalResizeObserver) {
+    window.ResizeObserver = class PatchedResizeObserver extends OriginalResizeObserver {
+      constructor(callback) {
+        super((entries, observer) => {
+          window.requestAnimationFrame(() => callback(entries, observer));
+        });
+      }
+    };
+  }
+}
+
 const clerkPublishableKey =
   process.env.REACT_APP_CLERK_PUBLISHABLE_KEY ||
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
