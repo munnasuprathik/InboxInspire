@@ -1021,13 +1021,18 @@ function AdminDashboard() {
           </div>
         )}
 
-        <Tabs defaultValue="users" className="space-y-6">
+        <Tabs defaultValue="realtime" className="space-y-6">
           <TabsList>
+            <TabsTrigger value="realtime">🔴 Live Activity</TabsTrigger>
             <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
             <TabsTrigger value="logs">Email Logs</TabsTrigger>
             <TabsTrigger value="feedback">Feedback</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="realtime">
+            <RealTimeAnalytics adminToken={sessionStorage.getItem('adminToken')} />
+          </TabsContent>
 
           <TabsContent value="users">
             <Card>
