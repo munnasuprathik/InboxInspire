@@ -643,8 +643,12 @@ async def root():
     return {"message": "InboxInspire API", "version": "2.0"}
 
 @api_router.post("/auth/login")
-async def login(request: LoginRequest, background_tasks: BackgroundTasks):
+async def login(request: LoginRequest, background_tasks: BackgroundTasks, req: Request):
     """Send magic link to email"""
+    # Track login attempt
+    ip_address = req.client.host if req.client else None
+    user_agent = req.headers.get("user-agent")
+    
     # Generate magic link token
     token = secrets.token_urlsafe(32)
     
@@ -658,6 +662,15 @@ async def login(request: LoginRequest, background_tasks: BackgroundTasks):
             {"$set": {"magic_link_token": token}}
         )
         user_exists = True
+        
+        # Track login request for existing user
+        await tracker.log_user_activity(
+            action_type="login_requested",
+            user_email=request.email,
+            details={"user_type": "existing"},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
     else:
         # Store pending login
         await db.pending_logins.update_one(
@@ -666,6 +679,15 @@ async def login(request: LoginRequest, background_tasks: BackgroundTasks):
             upsert=True
         )
         user_exists = False
+        
+        # Track login request for new user
+        await tracker.log_user_activity(
+            action_type="login_requested",
+            user_email=request.email,
+            details={"user_type": "new"},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
     
     # Prepare magic link email
     magic_link = f"https://aipep.preview.emergentagent.com/?token={token}&email={request.email}"
