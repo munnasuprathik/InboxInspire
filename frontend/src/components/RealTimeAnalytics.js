@@ -3,8 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Activity, Users, Zap, Clock, TrendingUp, Eye } from 'lucide-react';
 import axios from 'axios';
+import { formatDateTimeForTimezone } from "@/utils/timezoneFormatting";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const ADMIN_TIMEZONE = "Asia/Kolkata";
 
 export function RealTimeAnalytics({ adminToken }) {
   const [realtimeData, setRealtimeData] = useState(null);
@@ -65,7 +67,8 @@ export function RealTimeAnalytics({ adminToken }) {
 
     if (diff < 60) return `${diff}s ago`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return date.toLocaleTimeString();
+    // Use IST timezone for all timestamps
+    return formatDateTimeForTimezone(date, ADMIN_TIMEZONE, { includeZone: false });
   };
 
   if (loading) {

@@ -9,10 +9,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk } from "@clerk/clerk-react";
-import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, History, TrendingUp, Globe, RefreshCw, Flame, Star, Loader2 } from "lucide-react";
+import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, History, TrendingUp, Globe, RefreshCw, Flame, Star, Loader2, AlertTriangle, Download, Eye, Filter, Database, Search, Calendar, Play, Megaphone } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MessageHistory } from "@/components/MessageHistory";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
@@ -20,12 +21,16 @@ import { PersonalityManager } from "@/components/PersonalityManager";
 import { ScheduleManager } from "@/components/ScheduleManager";
 import { StreakCalendar } from "@/components/StreakCalendar";
 import { RealTimeAnalytics } from "@/components/RealTimeAnalytics";
+import { AdminUserDetails } from "@/components/AdminUserDetails";
 import { TIMEZONES } from "@/utils/timezones";
 import {
   formatScheduleTime,
   formatDateTimeForTimezone,
   getDisplayTimezone,
 } from "@/utils/timezoneFormatting";
+
+// IST timezone constant for admin dashboard
+const ADMIN_TIMEZONE = "Asia/Kolkata";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -792,12 +797,32 @@ function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
+  const [systemEvents, setSystemEvents] = useState([]);
+  const [errors, setErrors] = useState(null);
+  const [schedulerJobs, setSchedulerJobs] = useState([]);
+  const [dbHealth, setDbHealth] = useState(null);
+  const [trends, setTrends] = useState(null);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastSubject, setBroadcastSubject] = useState("");
+  const [allMessageHistory, setAllMessageHistory] = useState([]);
+  const [emailStats, setEmailStats] = useState(null);
+  const [messageHistoryFilter, setMessageHistoryFilter] = useState({
+    email: "",
+    personality: "",
+    startDate: "",
+    endDate: ""
+  });
   const [adminToken, setAdminToken] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserEmail, setSelectedUserEmail] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterActive, setFilterActive] = useState("all"); // all, active, inactive
+  const [logFilterStatus, setLogFilterStatus] = useState("all"); // all, success, failed
+  const [logFilterEmail, setLogFilterEmail] = useState("");
 
   const userTimezoneMap = useMemo(() => {
     const map = new Map();
@@ -814,17 +839,27 @@ function AdminDashboard() {
       setLoading(true);
       const headers = { Authorization: `Bearer ${token}` };
       
-      const [statsRes, usersRes, logsRes, feedbackRes] = await Promise.all([
+      const [statsRes, usersRes, logsRes, feedbackRes, eventsRes, errorsRes, jobsRes, healthRes, emailStatsRes] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/users`, { headers }),
-        axios.get(`${API}/admin/email-logs?limit=100`, { headers }),
-        axios.get(`${API}/admin/feedback?limit=100`, { headers })
+        axios.get(`${API}/admin/email-logs?limit=200`, { headers }),
+        axios.get(`${API}/admin/feedback?limit=100`, { headers }),
+        axios.get(`${API}/analytics/system-events?limit=100`, { headers }),
+        axios.get(`${API}/admin/errors?limit=100`, { headers }),
+        axios.get(`${API}/admin/scheduler/jobs`, { headers }),
+        axios.get(`${API}/admin/database/health`, { headers }),
+        axios.get(`${API}/admin/email-statistics?days=30`, { headers }).catch(() => ({ data: null }))
       ]);
 
       setStats(statsRes.data);
       setUsers(usersRes.data.users);
       setLogs(logsRes.data.logs);
       setFeedbacks(feedbackRes.data.feedbacks);
+      setSystemEvents(eventsRes.data.events || []);
+      setErrors(errorsRes.data);
+      setSchedulerJobs(jobsRes.data.jobs || []);
+      setDbHealth(healthRes.data);
+      setEmailStats(emailStatsRes.data);
       setAuthenticated(true);
       
       // Store token in sessionStorage
@@ -890,6 +925,13 @@ function AdminDashboard() {
     }
   }, []);
 
+  // Auto-load message history when tab is accessed
+  useEffect(() => {
+    if (authenticated && allMessageHistory.length === 0) {
+      fetchAllMessageHistory();
+    }
+  }, [authenticated]);
+
   // Filter users based on search and status
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -899,6 +941,129 @@ function AdminDashboard() {
                          (filterActive === "inactive" && !user.active);
     return matchesSearch && matchesFilter;
   });
+
+  // Filter logs
+  const filteredLogs = logs.filter(log => {
+    const matchesStatus = logFilterStatus === "all" || log.status === logFilterStatus;
+    const matchesEmail = !logFilterEmail || log.email.toLowerCase().includes(logFilterEmail.toLowerCase());
+    return matchesStatus && matchesEmail;
+  });
+
+  const handleViewUserDetails = (email) => {
+    setSelectedUserEmail(email);
+  };
+
+  const handleExportData = (type) => {
+    let data, filename;
+    switch(type) {
+      case 'users':
+        data = JSON.stringify(users, null, 2);
+        filename = 'users_export.json';
+        break;
+      case 'logs':
+        data = JSON.stringify(logs, null, 2);
+        filename = 'email_logs_export.json';
+        break;
+      case 'feedback':
+        data = JSON.stringify(feedbacks, null, 2);
+        filename = 'feedback_export.json';
+        break;
+      case 'messages':
+        data = JSON.stringify(allMessageHistory, null, 2);
+        filename = 'message_history_export.json';
+        break;
+      default:
+        return;
+    }
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${type} data`);
+  };
+
+  const handleGlobalSearch = async () => {
+    if (!searchQuery.trim()) return;
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      const response = await axios.get(`${API}/admin/search?query=${encodeURIComponent(searchQuery)}&limit=50`, { headers });
+      setSearchResults(response.data);
+    } catch (error) {
+      toast.error("Search failed");
+    }
+  };
+
+  const handleTriggerJob = async (jobId) => {
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      await axios.post(`${API}/admin/scheduler/jobs/${jobId}/trigger`, {}, { headers });
+      toast.success("Job triggered successfully");
+      handleRefresh();
+    } catch (error) {
+      toast.error("Failed to trigger job");
+    }
+  };
+
+  const handleBroadcast = async () => {
+    if (!broadcastMessage.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      const response = await axios.post(
+        `${API}/admin/broadcast`,
+        { message: broadcastMessage, subject: broadcastSubject || undefined },
+        { headers }
+      );
+      toast.success(`Broadcast sent: ${response.data.success} success, ${response.data.failed} failed`);
+      setBroadcastMessage("");
+      setBroadcastSubject("");
+      handleRefresh();
+    } catch (error) {
+      toast.error("Broadcast failed");
+    }
+  };
+
+  const fetchTrends = async (days = 30) => {
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      const response = await axios.get(`${API}/admin/analytics/trends?days=${days}`, { headers });
+      setTrends(response.data);
+    } catch (error) {
+      console.error("Failed to fetch trends:", error);
+    }
+  };
+
+  const fetchAllMessageHistory = async () => {
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      const params = new URLSearchParams();
+      if (messageHistoryFilter.email) params.append('email', messageHistoryFilter.email);
+      if (messageHistoryFilter.personality) params.append('personality', messageHistoryFilter.personality);
+      if (messageHistoryFilter.startDate) params.append('start_date', messageHistoryFilter.startDate);
+      if (messageHistoryFilter.endDate) params.append('end_date', messageHistoryFilter.endDate);
+      params.append('limit', '500');
+      
+      const response = await axios.get(`${API}/admin/message-history?${params.toString()}`, { headers });
+      setAllMessageHistory(response.data.messages || []);
+    } catch (error) {
+      toast.error("Failed to fetch message history");
+    }
+  };
+
+  const fetchEmailStatistics = async (days = 30) => {
+    try {
+      const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
+      const response = await axios.get(`${API}/admin/email-statistics?days=${days}`, { headers });
+      setEmailStats(response.data);
+    } catch (error) {
+      console.error("Failed to fetch email statistics:", error);
+    }
+  };
 
   if (!authenticated) {
     return (
@@ -1025,16 +1190,203 @@ function AdminDashboard() {
         )}
 
         <Tabs defaultValue="realtime" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="realtime">🔴 Live Activity</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-12">
+            <TabsTrigger value="realtime">🔴 Live</TabsTrigger>
             <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
-            <TabsTrigger value="logs">Email Logs</TabsTrigger>
-            <TabsTrigger value="feedback">Feedback</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="email-history">Email History</TabsTrigger>
+            <TabsTrigger value="logs">Logs ({logs.length})</TabsTrigger>
+            <TabsTrigger value="feedback">Feedback ({feedbacks.length})</TabsTrigger>
+            <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="errors">Errors {errors?.total > 0 && `(${errors.total})`}</TabsTrigger>
+            <TabsTrigger value="scheduler">Scheduler</TabsTrigger>
+            <TabsTrigger value="database">Database</TabsTrigger>
+            <TabsTrigger value="trends">Trends</TabsTrigger>
+            <TabsTrigger value="search">Search</TabsTrigger>
+            <TabsTrigger value="broadcast">Broadcast</TabsTrigger>
           </TabsList>
           
           <TabsContent value="realtime">
             <RealTimeAnalytics adminToken={sessionStorage.getItem('adminToken')} />
+          </TabsContent>
+
+          <TabsContent value="email-history">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>All Email Send History</CardTitle>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={fetchAllMessageHistory}>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Refresh
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleExportData('messages')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <Input
+                      placeholder="Filter by email..."
+                      value={messageHistoryFilter.email}
+                      onChange={(e) => setMessageHistoryFilter({...messageHistoryFilter, email: e.target.value})}
+                      className="max-w-xs"
+                      onKeyPress={(e) => e.key === 'Enter' && fetchAllMessageHistory()}
+                    />
+                    <Input
+                      placeholder="Filter by personality..."
+                      value={messageHistoryFilter.personality}
+                      onChange={(e) => setMessageHistoryFilter({...messageHistoryFilter, personality: e.target.value})}
+                      className="max-w-xs"
+                      onKeyPress={(e) => e.key === 'Enter' && fetchAllMessageHistory()}
+                    />
+                    <Input
+                      type="date"
+                      placeholder="Start date"
+                      value={messageHistoryFilter.startDate}
+                      onChange={(e) => setMessageHistoryFilter({...messageHistoryFilter, startDate: e.target.value})}
+                      className="max-w-xs"
+                    />
+                    <Input
+                      type="date"
+                      placeholder="End date"
+                      value={messageHistoryFilter.endDate}
+                      onChange={(e) => setMessageHistoryFilter({...messageHistoryFilter, endDate: e.target.value})}
+                      className="max-w-xs"
+                    />
+                    <Button onClick={fetchAllMessageHistory} size="sm">
+                      <Filter className="h-4 w-4 mr-2" />
+                      Apply Filters
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        setMessageHistoryFilter({email: "", personality: "", startDate: "", endDate: ""});
+                        fetchAllMessageHistory();
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {allMessageHistory.length > 0 ? (
+                      allMessageHistory.map((msg) => {
+                        return (
+                          <Card key={msg.id} className="hover:bg-slate-50 transition">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <p className="font-medium text-sm">{msg.email}</p>
+                                    {msg.personality && (
+                                      <Badge variant="outline">{msg.personality.value || 'Unknown'}</Badge>
+                                    )}
+                                    {msg.used_fallback && (
+                                      <Badge className="bg-yellow-500">Backup</Badge>
+                                    )}
+                                    {msg.rating && (
+                                      <div className="flex">
+                                        {[...Array(5)].map((_, i) => (
+                                          <Star
+                                            key={i}
+                                            className={`h-3 w-3 ${
+                                              i < msg.rating
+                                                ? 'fill-yellow-400 text-yellow-400'
+                                                : 'text-gray-300'
+                                            }`}
+                                          />
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-700 line-clamp-3 mb-2">{msg.message}</p>
+                                  {msg.feedback_text && (
+                                    <div className="mt-2 p-2 bg-blue-50 rounded border-l-2 border-blue-400">
+                                      <p className="text-xs text-blue-700 font-medium mb-1">User Feedback:</p>
+                                      <p className="text-xs text-blue-900">{msg.feedback_text}</p>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right ml-4">
+                                  <span className="text-xs text-muted-foreground block">
+                                    {formatDateTimeForTimezone(msg.sent_at, ADMIN_TIMEZONE, { includeZone: true })}
+                                  </span>
+                                  {msg.message_type && (
+                                    <Badge variant="outline" className="mt-1 text-xs">
+                                      {msg.message_type}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground mb-4">No message history found</p>
+                        <Button onClick={fetchAllMessageHistory}>Load Message History</Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {emailStats && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Email Delivery Statistics</CardTitle>
+                    <div className="flex gap-2 mt-4">
+                      <Button size="sm" variant="outline" onClick={() => fetchEmailStatistics(7)}>7 Days</Button>
+                      <Button size="sm" variant="outline" onClick={() => fetchEmailStatistics(30)}>30 Days</Button>
+                      <Button size="sm" variant="outline" onClick={() => fetchEmailStatistics(90)}>90 Days</Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Total Sent</p>
+                        <p className="text-2xl font-bold text-blue-600">{emailStats.summary?.total_sent || 0}</p>
+                      </div>
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Successful</p>
+                        <p className="text-2xl font-bold text-green-600">{emailStats.summary?.successful || 0}</p>
+                      </div>
+                      <div className="p-4 bg-red-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Failed</p>
+                        <p className="text-2xl font-bold text-red-600">{emailStats.summary?.failed || 0}</p>
+                      </div>
+                      <div className="p-4 bg-indigo-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Success Rate</p>
+                        <p className="text-2xl font-bold text-indigo-600">{emailStats.summary?.success_rate || 0}%</p>
+                      </div>
+                    </div>
+
+                    {emailStats.top_users && emailStats.top_users.length > 0 && (
+                      <div className="mt-6">
+                        <h3 className="font-medium mb-3">Top Users by Email Count</h3>
+                        <div className="space-y-2">
+                          {emailStats.top_users.slice(0, 10).map((user, idx) => (
+                            <div key={user._id || idx} className="flex items-center justify-between p-2 border rounded">
+                              <span className="text-sm font-medium">{user._id || 'Unknown'}</span>
+                              <div className="flex items-center gap-3">
+                                <Badge className="bg-green-500">{user.success_count || 0} ✓</Badge>
+                                <Badge className="bg-red-500">{user.failed_count || 0} ✗</Badge>
+                                <span className="text-sm font-bold">{user.count || 0} total</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="users">
@@ -1130,6 +1482,14 @@ function AdminDashboard() {
                             <Button 
                               size="sm" 
                               variant="outline"
+                              onClick={() => handleViewUserDetails(user.email)}
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              Details
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
                               onClick={() => handleSendTestEmail(user.email)}
                             >
                               <Mail className="h-3 w-3 mr-1" />
@@ -1158,12 +1518,34 @@ function AdminDashboard() {
           <TabsContent value="logs">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Email Logs</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Email Logs</CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => handleExportData('logs')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Input
+                    placeholder="Filter by email..."
+                    value={logFilterEmail}
+                    onChange={(e) => setLogFilterEmail(e.target.value)}
+                    className="max-w-xs"
+                  />
+                  <select
+                    value={logFilterStatus}
+                    onChange={(e) => setLogFilterStatus(e.target.value)}
+                    className="px-3 py-2 border rounded-md"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="success">Success</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {logs.map((log) => {
-                    const logTimezone = log.timezone || userTimezoneMap.get(log.email);
+                  {filteredLogs.map((log) => {
                     const timestamp = log.local_sent_at || log.sent_at;
                     return (
                       <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
@@ -1182,14 +1564,14 @@ function AdminDashboard() {
                           )}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {formatDateTimeForTimezone(timestamp, logTimezone, {
-                            includeZone: Boolean(logTimezone),
+                          {formatDateTimeForTimezone(timestamp, ADMIN_TIMEZONE, {
+                            includeZone: true,
                           })}
                         </span>
                       </div>
                     );
                   })}
-                  {logs.length === 0 && (
+                  {filteredLogs.length === 0 && (
                     <p className="text-center text-muted-foreground py-8">No logs found</p>
                   )}
                 </div>
@@ -1197,10 +1579,162 @@ function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="events">
+            <Card>
+              <CardHeader>
+                <CardTitle>System Events</CardTitle>
+                <CardDescription>Background processes and system activities</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {systemEvents.map((event) => (
+                    <div key={event.id} className="flex items-start justify-between p-3 border rounded-lg text-sm">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge className={event.status === 'success' ? 'bg-green-500' : 'bg-red-500'}>
+                            {event.status}
+                          </Badge>
+                          <span className="font-medium">{event.event_type}</span>
+                          <Badge variant="outline">{event.event_category}</Badge>
+                        </div>
+                        {event.details && Object.keys(event.details).length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {JSON.stringify(event.details).substring(0, 150)}
+                          </p>
+                        )}
+                        {event.duration_ms && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Duration: {event.duration_ms}ms
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTimeForTimezone(event.timestamp, ADMIN_TIMEZONE, { includeZone: true })}
+                      </span>
+                    </div>
+                  ))}
+                  {systemEvents.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">No system events found</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="errors">
+            <div className="grid gap-6">
+              {errors && (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                        <CardTitle>System Errors ({errors.system_errors?.length || 0})</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {errors.system_errors?.slice(0, 20).map((error) => (
+                          <div key={error.id} className="p-3 border rounded-lg bg-red-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <Badge className="bg-red-500 mb-2">{error.event_type}</Badge>
+                                {error.details && (
+                                  <pre className="text-xs overflow-x-auto mt-2">
+                                    {JSON.stringify(error.details, null, 2)}
+                                  </pre>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateTimeForTimezone(error.timestamp, ADMIN_TIMEZONE, { includeZone: true })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {(!errors.system_errors || errors.system_errors.length === 0) && (
+                          <p className="text-center text-muted-foreground py-4">No system errors</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>API Errors ({errors.api_errors?.length || 0})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {errors.api_errors?.slice(0, 20).map((error) => (
+                          <div key={error.id} className="p-3 border rounded-lg bg-orange-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge className="bg-orange-500">{error.status_code}</Badge>
+                                  <span className="font-medium text-sm">{error.endpoint}</span>
+                                </div>
+                                {error.error_message && (
+                                  <p className="text-xs text-red-600">{error.error_message}</p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Response time: {error.response_time_ms}ms
+                                </p>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateTimeForTimezone(error.timestamp, ADMIN_TIMEZONE, { includeZone: true })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {(!errors.api_errors || errors.api_errors.length === 0) && (
+                          <p className="text-center text-muted-foreground py-4">No API errors</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Email Failures ({errors.email_errors?.length || 0})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {errors.email_errors?.slice(0, 20).map((error) => (
+                          <div key={error.id} className="p-3 border rounded-lg bg-yellow-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-medium text-sm">{error.email}</p>
+                                <p className="text-xs text-muted-foreground mt-1">{error.subject}</p>
+                                {error.error_message && (
+                                  <p className="text-xs text-red-600 mt-1">Error: {error.error_message}</p>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateTimeForTimezone(error.sent_at, ADMIN_TIMEZONE, { includeZone: true })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {(!errors.email_errors || errors.email_errors.length === 0) && (
+                          <p className="text-center text-muted-foreground py-4">No email failures</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+          </TabsContent>
+
           <TabsContent value="feedback">
             <Card>
               <CardHeader>
-                <CardTitle>User Feedback</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>User Feedback</CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => handleExportData('feedback')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -1223,14 +1757,24 @@ function AdminDashboard() {
                               ))}
                             </div>
                           </div>
-                          {feedback.comment && (
-                            <p className="text-sm text-muted-foreground">{feedback.comment}</p>
+                          {feedback.feedback_text && (
+                            <div className="mt-2">
+                              <p className="text-xs text-muted-foreground mb-1">Feedback Message:</p>
+                              <p className="text-sm text-gray-800 bg-gray-50 p-2 rounded border">{feedback.feedback_text}</p>
+                            </div>
+                          )}
+                          {feedback.personality && (
+                            <div className="mt-2">
+                              <Badge variant="outline" className="text-xs">
+                                {feedback.personality.value || 'Unknown'}
+                              </Badge>
+                            </div>
                           )}
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {formatDateTimeForTimezone(
                             feedback.created_at,
-                            userTimezoneMap.get(feedback.email),
+                            ADMIN_TIMEZONE,
                             { includeZone: true },
                           )}
                         </span>
@@ -1330,7 +1874,295 @@ function AdminDashboard() {
               </Card>
             </div>
           </TabsContent>
+
+          <TabsContent value="scheduler">
+            <Card>
+              <CardHeader>
+                <CardTitle>Scheduled Jobs ({schedulerJobs.length})</CardTitle>
+                <CardDescription>All active email scheduling jobs</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {schedulerJobs.map((job) => (
+                    <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Calendar className="h-4 w-4 text-indigo-600" />
+                          <span className="font-medium">{job.id}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Function: {job.func}</p>
+                        <p className="text-xs text-muted-foreground">Trigger: {job.trigger || 'N/A'}</p>
+                        {job.next_run_time && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Next run: {formatDateTimeForTimezone(new Date(job.next_run_time), ADMIN_TIMEZONE, { includeZone: true })}
+                          </p>
+                        )}
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => handleTriggerJob(job.id)}>
+                        <Play className="h-3 w-3 mr-1" />
+                        Trigger
+                      </Button>
+                    </div>
+                  ))}
+                  {schedulerJobs.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">No scheduled jobs</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="database">
+            <div className="grid gap-6">
+              {dbHealth && (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Collection Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {Object.entries(dbHealth.collections || {}).map(([name, count]) => (
+                          <div key={name} className="p-3 border rounded-lg">
+                            <p className="text-sm text-muted-foreground capitalize">{name.replace('_', ' ')}</p>
+                            <p className="text-2xl font-bold">{count.toLocaleString()}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Total Documents</p>
+                        <p className="text-3xl font-bold text-blue-600">{dbHealth.total_documents?.toLocaleString() || 0}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Recent Activity (Last 24 Hours)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Messages</p>
+                          <p className="text-2xl font-bold">{dbHealth.recent_activity?.messages_24h || 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Emails</p>
+                          <p className="text-2xl font-bold">{dbHealth.recent_activity?.emails_24h || 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Activities</p>
+                          <p className="text-2xl font-bold">{dbHealth.recent_activity?.activities_24h || 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Errors</p>
+                          <p className="text-2xl font-bold text-red-600">{dbHealth.recent_activity?.errors_24h || 0}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="trends">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Analytics Trends</CardTitle>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => fetchTrends(7)}>7 Days</Button>
+                    <Button size="sm" variant="outline" onClick={() => fetchTrends(30)}>30 Days</Button>
+                    <Button size="sm" variant="outline" onClick={() => fetchTrends(90)}>90 Days</Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {trends ? (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="font-medium mb-2">User Registrations</h3>
+                      <div className="space-y-2">
+                        {trends.user_trends?.slice(0, 10).map((item) => {
+                          const maxCount = trends.user_trends?.length > 0 
+                            ? Math.max(...trends.user_trends.map(t => t.count || 0))
+                            : 1;
+                          const percentage = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+                          return (
+                            <div key={item._id} className="flex items-center justify-between">
+                              <span className="text-sm">{item._id}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-32 h-2 bg-slate-200 rounded-full">
+                                  <div className="h-2 bg-blue-500 rounded-full" style={{ width: `${percentage}%` }} />
+                                </div>
+                                <span className="text-sm font-medium w-8">{item.count}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="font-medium mb-2">Email Activity</h3>
+                      <div className="space-y-2">
+                        {trends.email_trends?.slice(0, 10).map((item) => (
+                          <div key={item._id} className="flex items-center justify-between">
+                            <span className="text-sm">{item._id}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-green-500">{item.success || 0}</Badge>
+                              <Badge className="bg-red-500">{item.failed || 0}</Badge>
+                              <span className="text-sm font-medium">{item.count} total</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="font-medium mb-2">Feedback Trends</h3>
+                      <div className="space-y-2">
+                        {trends.feedback_trends?.slice(0, 10).map((item) => (
+                          <div key={item._id} className="flex items-center justify-between">
+                            <span className="text-sm">{item._id}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">Avg: {item.avg_rating?.toFixed(1) || 0}</span>
+                              <span className="text-sm font-medium">{item.count} feedbacks</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Button onClick={() => fetchTrends(30)}>Load Trends</Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="search">
+            <Card>
+              <CardHeader>
+                <CardTitle>Global Search</CardTitle>
+                <CardDescription>Search across all collections</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    placeholder="Search users, messages, feedback, logs..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleGlobalSearch()}
+                  />
+                  <Button onClick={handleGlobalSearch}>
+                    <Search className="h-4 w-4 mr-2" />
+                    Search
+                  </Button>
+                </div>
+                {searchResults && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">Found {searchResults.total} results</p>
+                    {searchResults.results.users.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Users ({searchResults.results.users.length})</h3>
+                        <div className="space-y-2">
+                          {searchResults.results.users.map((user) => (
+                            <div key={user.email} className="p-2 border rounded text-sm">
+                              <p className="font-medium">{user.name} - {user.email}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {searchResults.results.messages.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Messages ({searchResults.results.messages.length})</h3>
+                        <div className="space-y-2">
+                          {searchResults.results.messages.map((msg) => (
+                            <div key={msg.id} className="p-2 border rounded text-sm">
+                              <p className="font-medium">{msg.email}</p>
+                              <p className="text-xs text-muted-foreground">{msg.message?.substring(0, 100)}...</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {searchResults.results.feedback.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Feedback ({searchResults.results.feedback.length})</h3>
+                        <div className="space-y-2">
+                          {searchResults.results.feedback.map((fb) => (
+                            <div key={fb.id} className="p-2 border rounded text-sm">
+                              <p className="font-medium">{fb.email}</p>
+                              <p className="text-xs text-muted-foreground">{fb.comment?.substring(0, 100)}...</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {searchResults.results.logs.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Logs ({searchResults.results.logs.length})</h3>
+                        <div className="space-y-2">
+                          {searchResults.results.logs.map((log) => (
+                            <div key={log.id} className="p-2 border rounded text-sm">
+                              <p className="font-medium">{log.email} - {log.subject}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="broadcast">
+            <Card>
+              <CardHeader>
+                <CardTitle>Broadcast Message</CardTitle>
+                <CardDescription>Send a message to all active users</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Subject (Optional)</Label>
+                    <Input
+                      placeholder="Message subject..."
+                      value={broadcastSubject}
+                      onChange={(e) => setBroadcastSubject(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Message (HTML supported)</Label>
+                    <Textarea
+                      placeholder="Enter your message here..."
+                      value={broadcastMessage}
+                      onChange={(e) => setBroadcastMessage(e.target.value)}
+                      rows={10}
+                    />
+                  </div>
+                  <Button onClick={handleBroadcast} className="w-full">
+                    <Megaphone className="h-4 w-4 mr-2" />
+                    Send to All Active Users ({users.filter(u => u.active).length})
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
+
+        {/* User Details Modal */}
+        {selectedUserEmail && (
+          <AdminUserDetails
+            email={selectedUserEmail}
+            adminToken={sessionStorage.getItem('adminToken')}
+            onClose={() => setSelectedUserEmail(null)}
+          />
+        )}
       </div>
     </div>
   );
