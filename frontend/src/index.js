@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/clerk-react";
 import "@/index.css";
 import App from "@/App";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Hide noisy ResizeObserver errors in dev overlay
 if (typeof window !== "undefined") {
@@ -89,6 +90,19 @@ if (typeof window !== "undefined") {
       }
     };
   }
+
+  // Catch React rendering errors for objects
+  const originalError = console.error;
+  console.error = (...args) => {
+    if (args.length > 0 && typeof args[0] === 'string' && args[0].includes('Objects are not valid as a React child')) {
+      console.warn('React rendering error caught:', args);
+      // Log the component stack if available
+      if (args.length > 1) {
+        console.warn('Error details:', args.slice(1));
+      }
+    }
+    originalError(...args);
+  };
 }
 
 const clerkPublishableKey =
@@ -105,8 +119,10 @@ if (!clerkPublishableKey) {
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={clerkPublishableKey}>
-      <App />
-    </ClerkProvider>
+    <ErrorBoundary>
+      <ClerkProvider publishableKey={clerkPublishableKey}>
+        <App />
+      </ClerkProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

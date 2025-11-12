@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { X, Mail, Star, Activity, Clock, TrendingUp, User, Calendar, MessageSquare } from 'lucide-react';
 import axios from 'axios';
 import { formatDateTimeForTimezone, getDisplayTimezone } from "@/utils/timezoneFormatting";
+import { safePersonalityValue } from "@/utils/safeRender";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -182,7 +183,7 @@ export function AdminUserDetails({ email, adminToken, onClose }) {
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge>{msg.personality?.value || 'Unknown'}</Badge>
+                            <Badge>{safePersonalityValue(msg.personality)}</Badge>
                             <span className="text-xs text-muted-foreground">
                               {formatDateTimeForTimezone(msg.sent_at, timezone, { includeZone: true })}
                             </span>
@@ -218,7 +219,7 @@ export function AdminUserDetails({ email, adminToken, onClose }) {
                                 }`}
                               />
                             ))}
-                            <Badge>{fb.personality?.value || 'Unknown'}</Badge>
+                            <Badge>{safePersonalityValue(fb.personality)}</Badge>
                           </div>
                           {fb.feedback_text && (
                             <div className="mt-2">

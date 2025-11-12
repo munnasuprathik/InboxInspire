@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { safeSelectValue, safePersonalityValue } from "@/utils/safeRender";
+import { sanitizeUser } from "@/utils/dataSanitizer";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -55,7 +57,10 @@ export function PersonalityManager({ user, onUpdate }) {
       
       // Refresh user data
       const response = await axios.get(`${API}/users/${user.email}`);
-      onUpdate(response.data);
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        onUpdate(sanitizedUser);
+      }
     } catch (error) {
       toast.error("Failed to add personality");
     } finally {
@@ -76,7 +81,10 @@ export function PersonalityManager({ user, onUpdate }) {
       
       // Refresh user data
       const response = await axios.get(`${API}/users/${user.email}`);
-      onUpdate(response.data);
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        onUpdate(sanitizedUser);
+      }
     } catch (error) {
       toast.error("Failed to remove personality");
     } finally {
@@ -120,7 +128,7 @@ export function PersonalityManager({ user, onUpdate }) {
                 </RadioGroup>
 
                 {newPersonality.type === "famous" && (
-                  <Select value={newPersonality.value} onValueChange={(value) => setNewPersonality({...newPersonality, value})}>
+                  <Select value={safeSelectValue(newPersonality.value, '')} onValueChange={(value) => setNewPersonality({...newPersonality, value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a personality" />
                     </SelectTrigger>
@@ -133,7 +141,7 @@ export function PersonalityManager({ user, onUpdate }) {
                 )}
 
                 {newPersonality.type === "tone" && (
-                  <Select value={newPersonality.value} onValueChange={(value) => setNewPersonality({...newPersonality, value})}>
+                  <Select value={safeSelectValue(newPersonality.value, '')} onValueChange={(value) => setNewPersonality({...newPersonality, value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a tone" />
                     </SelectTrigger>
@@ -176,7 +184,7 @@ export function PersonalityManager({ user, onUpdate }) {
                   {index + 1}
                 </div>
                 <div>
-                  <p className="font-semibold">{personality?.value || 'Unknown'}</p>
+                  <p className="font-semibold">{safePersonalityValue(personality)}</p>
                   <p className="text-xs text-muted-foreground capitalize">{personality?.type || 'custom'}</p>
                 </div>
               </div>

@@ -28,6 +28,8 @@ import {
   formatDateTimeForTimezone,
   getDisplayTimezone,
 } from "@/utils/timezoneFormatting";
+import { safeSelectValue, safePersonalityValue } from "@/utils/safeRender";
+import { sanitizeUser, sanitizeMessages, sanitizeFilter } from "@/utils/dataSanitizer";
 
 // IST timezone constant for admin dashboard
 const ADMIN_TIMEZONE = "Asia/Kolkata";
@@ -130,7 +132,14 @@ function OnboardingScreen({ email, onComplete }) {
     rotationMode: "sequential",
     frequency: "daily",
     time: "09:00",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    timezone: (() => {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return typeof tz === 'string' ? tz : "UTC";
+      } catch {
+        return "UTC";
+      }
+    })()
   });
   const [loading, setLoading] = useState(false);
 
@@ -314,9 +323,11 @@ function OnboardingScreen({ email, onComplete }) {
                 {formData.personalities.length > 0 && (
                   <div className="space-y-2">
                     <Label>Your Personalities ({formData.personalities.length})</Label>
-                    {formData.personalities.map((p, i) => (
+                    {formData.personalities.map((p, i) => {
+                      const displayValue = safePersonalityValue(p);
+                      return (
                       <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                        <span className="font-medium">{p?.value || 'Unknown'}</span>
+                        <span className="font-medium">{displayValue}</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -328,7 +339,8 @@ function OnboardingScreen({ email, onComplete }) {
                           Remove
                         </Button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -358,7 +370,7 @@ function OnboardingScreen({ email, onComplete }) {
 
                   {formData.currentPersonality.type === "famous" && (
                     <Select 
-                      value={formData.currentPersonality.value} 
+                      value={safeSelectValue(formData.currentPersonality.value, '')} 
                       onValueChange={(value) => setFormData({
                         ...formData, 
                         currentPersonality: {...formData.currentPersonality, value}
@@ -375,9 +387,9 @@ function OnboardingScreen({ email, onComplete }) {
 
                   {formData.currentPersonality.type === "tone" && (
                     <Select 
-                      value={formData.currentPersonality.value} 
+                      value={safeSelectValue(formData.currentPersonality.value, '')} 
                       onValueChange={(value) => setFormData({
-                        ...formData, 
+                        ...formData,
                         currentPersonality: {...formData.currentPersonality, value}
                       })}
                     >
@@ -425,7 +437,7 @@ function OnboardingScreen({ email, onComplete }) {
             <CardContent className="space-y-6">
               <div>
                 <Label>Frequency</Label>
-                <Select value={formData.frequency} onValueChange={(value) => setFormData({...formData, frequency: value})}>
+                <Select value={safeSelectValue(formData.frequency, 'daily')} onValueChange={(value) => setFormData({...formData, frequency: value})}>
                   <SelectTrigger className="mt-2">
                     <SelectValue />
                   </SelectTrigger>
@@ -453,7 +465,14 @@ function OnboardingScreen({ email, onComplete }) {
                   Your Timezone
                 </Label>
                 <Select 
-                  value={formData.timezone} 
+                  value={safeSelectValue(formData.timezone, (() => {
+                    try {
+                      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                      return typeof tz === 'string' ? tz : "UTC";
+                    } catch {
+                      return "UTC";
+                    }
+                  })())} 
                   onValueChange={(value) => setFormData({...formData, timezone: value})}
                 >
                   <SelectTrigger className="mt-2">
@@ -486,11 +505,11 @@ function OnboardingScreen({ email, onComplete }) {
 function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
-    name: user.name,
-    goals: user.goals,
-    frequency: user.schedule.frequency,
-    time: user.schedule.times ? user.schedule.times[0] : (user.schedule.time || "09:00"),
-    active: user.active
+    name: typeof user.name === 'string' ? user.name : '',
+    goals: typeof user.goals === 'string' ? user.goals : '',
+    frequency: typeof user.schedule?.frequency === 'string' ? user.schedule.frequency : 'daily',
+    time: user.schedule?.times?.[0] || (typeof user.schedule?.time === 'string' ? user.schedule.time : "09:00"),
+    active: typeof user.active === 'boolean' ? user.active : false
   });
   const [previewMessage, setPreviewMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -507,14 +526,25 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const statusColor = schedulePaused ? "bg-yellow-400" : user.active ? "bg-green-500" : "bg-gray-400";
 
   const handleUserStateUpdate = useCallback((updatedUser) => {
-    onUserUpdate(updatedUser);
-    setRefreshKey((prev) => prev + 1);
+    // Sanitize user data before updating state
+    const sanitizedUser = sanitizeUser(updatedUser);
+    if (sanitizedUser) {
+      onUserUpdate(sanitizedUser);
+      setRefreshKey((prev) => prev + 1);
+    } else {
+      console.error('Failed to sanitize user data');
+      toast.error('Invalid user data received');
+    }
   }, [onUserUpdate]);
 
   const refreshUserData = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/users/${user.email}`);
-      handleUserStateUpdate(response.data);
+      // Sanitize response data before updating
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        handleUserStateUpdate(sanitizedUser);
+      }
     } catch (error) {
       console.error("Failed to refresh user data:", error);
     }
@@ -535,7 +565,11 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       };
 
       const response = await axios.put(`${API}/users/${user.email}`, updates);
-      handleUserStateUpdate(response.data);
+      // Sanitize response data before updating
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        handleUserStateUpdate(sanitizedUser);
+      }
       setEditMode(false);
       toast.success("Settings updated!");
     } catch (error) {
@@ -1042,14 +1076,21 @@ function AdminDashboard() {
     try {
       const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
       const params = new URLSearchParams();
-      if (messageHistoryFilter.email) params.append('email', messageHistoryFilter.email);
-      if (messageHistoryFilter.personality) params.append('personality', messageHistoryFilter.personality);
-      if (messageHistoryFilter.startDate) params.append('start_date', messageHistoryFilter.startDate);
-      if (messageHistoryFilter.endDate) params.append('end_date', messageHistoryFilter.endDate);
+      if (messageHistoryFilter.email) params.append('email', String(messageHistoryFilter.email));
+      if (messageHistoryFilter.personality) {
+        const personalityValue = typeof messageHistoryFilter.personality === 'string' 
+          ? messageHistoryFilter.personality 
+          : (messageHistoryFilter.personality?.value || messageHistoryFilter.personality?.name || '');
+        if (personalityValue) params.append('personality', String(personalityValue));
+      }
+      if (messageHistoryFilter.startDate) params.append('start_date', String(messageHistoryFilter.startDate));
+      if (messageHistoryFilter.endDate) params.append('end_date', String(messageHistoryFilter.endDate));
       params.append('limit', '500');
       
       const response = await axios.get(`${API}/admin/message-history?${params.toString()}`, { headers });
-      setAllMessageHistory(response.data.messages || []);
+      // Sanitize messages before setting state
+      const sanitizedMessages = sanitizeMessages(response.data.messages || []);
+      setAllMessageHistory(sanitizedMessages);
     } catch (error) {
       toast.error("Failed to fetch message history");
     }
@@ -1236,7 +1277,7 @@ function AdminDashboard() {
                     />
                     <Input
                       placeholder="Filter by personality..."
-                      value={messageHistoryFilter.personality}
+                      value={typeof messageHistoryFilter.personality === 'string' ? messageHistoryFilter.personality : ''}
                       onChange={(e) => setMessageHistoryFilter({...messageHistoryFilter, personality: e.target.value})}
                       className="max-w-xs"
                       onKeyPress={(e) => e.key === 'Enter' && fetchAllMessageHistory()}
@@ -1283,7 +1324,7 @@ function AdminDashboard() {
                                   <div className="flex items-center gap-2 mb-2">
                                     <p className="font-medium text-sm">{msg.email}</p>
                                     {msg.personality && (
-                                      <Badge variant="outline">{msg.personality.value || 'Unknown'}</Badge>
+                                      <Badge variant="outline">{safePersonalityValue(msg.personality)}</Badge>
                                     )}
                                     {msg.used_fallback && (
                                       <Badge className="bg-yellow-500">Backup</Badge>
@@ -1433,7 +1474,7 @@ function AdminDashboard() {
                     
                     // Get personality display string safely
                     const personalityDisplay = personalities.length > 0 
-                      ? personalities.map(p => p.value || 'Unknown').join(', ') 
+                      ? personalities.map(p => safePersonalityValue(p)).join(', ') 
                       : 'None';
                     
                     return (
@@ -1766,7 +1807,7 @@ function AdminDashboard() {
                           {feedback.personality && (
                             <div className="mt-2">
                               <Badge variant="outline" className="text-xs">
-                                {feedback.personality.value || 'Unknown'}
+                                {safePersonalityValue(feedback.personality)}
                               </Badge>
                             </div>
                           )}

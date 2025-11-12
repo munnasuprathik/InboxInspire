@@ -9,13 +9,34 @@ import { Switch } from "@/components/ui/switch";
 import { Clock, Pause, Play, SkipForward } from "lucide-react";
 import { toast } from "sonner";
 import { TIMEZONES } from "@/utils/timezones";
+import { safeSelectValue } from "@/utils/safeRender";
+import { sanitizeUser } from "@/utils/dataSanitizer";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export function ScheduleManager({ user, onUpdate }) {
   const [loading, setLoading] = useState(false);
-  const [schedule, setSchedule] = useState(user.schedule);
+  const [schedule, setSchedule] = useState(() => {
+    const userSchedule = user.schedule || {};
+    return {
+      frequency: typeof userSchedule.frequency === 'string' ? userSchedule.frequency : 'daily',
+      times: Array.isArray(userSchedule.times) ? userSchedule.times : (userSchedule.time ? [userSchedule.time] : ['09:00']),
+      timezone: typeof userSchedule.timezone === 'string' ? userSchedule.timezone : (() => {
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          return typeof tz === 'string' ? tz : "UTC";
+        } catch {
+          return "UTC";
+        }
+      })(),
+      paused: typeof userSchedule.paused === 'boolean' ? userSchedule.paused : false,
+      skip_next: typeof userSchedule.skip_next === 'boolean' ? userSchedule.skip_next : false,
+      custom_days: Array.isArray(userSchedule.custom_days) ? userSchedule.custom_days : [],
+      custom_interval: typeof userSchedule.custom_interval === 'number' ? userSchedule.custom_interval : 1,
+      monthly_dates: Array.isArray(userSchedule.monthly_dates) ? userSchedule.monthly_dates : []
+    };
+  });
 
   const handleUpdateSchedule = async () => {
     setLoading(true);
@@ -27,7 +48,10 @@ export function ScheduleManager({ user, onUpdate }) {
       
       // Refresh user data
       const response = await axios.get(`${API}/users/${user.email}`);
-      onUpdate(response.data);
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        onUpdate(sanitizedUser);
+      }
     } catch (error) {
       toast.error("Failed to update schedule");
     } finally {
@@ -47,7 +71,10 @@ export function ScheduleManager({ user, onUpdate }) {
       
       // Refresh user data
       const response = await axios.get(`${API}/users/${user.email}`);
-      onUpdate(response.data);
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        onUpdate(sanitizedUser);
+      }
       setSchedule(response.data.schedule);
     } catch (error) {
       toast.error("Failed to update schedule");
@@ -64,7 +91,10 @@ export function ScheduleManager({ user, onUpdate }) {
       
       // Refresh user data
       const response = await axios.get(`${API}/users/${user.email}`);
-      onUpdate(response.data);
+      const sanitizedUser = sanitizeUser(response.data);
+      if (sanitizedUser) {
+        onUpdate(sanitizedUser);
+      }
       setSchedule(response.data.schedule);
     } catch (error) {
       toast.error("Failed to skip next email");
@@ -131,7 +161,7 @@ export function ScheduleManager({ user, onUpdate }) {
         <div>
           <Label>Frequency</Label>
           <Select 
-            value={schedule.frequency} 
+            value={safeSelectValue(schedule.frequency, 'daily')} 
             onValueChange={(value) => setSchedule({...schedule, frequency: value})}
           >
             <SelectTrigger className="mt-2">
@@ -150,7 +180,7 @@ export function ScheduleManager({ user, onUpdate }) {
           <Label>Time</Label>
           <Input
             type="time"
-            value={schedule.times[0]}
+            value={Array.isArray(schedule.times) && schedule.times.length > 0 ? schedule.times[0] : '09:00'}
             onChange={(e) => setSchedule({...schedule, times: [e.target.value]})}
             className="mt-2"
           />
@@ -160,7 +190,14 @@ export function ScheduleManager({ user, onUpdate }) {
         <div>
           <Label>Timezone</Label>
           <Select 
-            value={schedule.timezone} 
+            value={safeSelectValue(schedule.timezone, (() => {
+              try {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                return typeof tz === 'string' ? tz : "UTC";
+              } catch {
+                return "UTC";
+              }
+            })())} 
             onValueChange={(value) => setSchedule({...schedule, timezone: value})}
           >
             <SelectTrigger className="mt-2">

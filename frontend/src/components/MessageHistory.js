@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { formatDateTimeForTimezone } from "@/utils/timezoneFormatting";
+import { safePersonalityValue } from "@/utils/safeRender";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -88,7 +89,7 @@ export function MessageHistory({ email, timezone, refreshKey = 0, onFeedbackSubm
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <CardTitle className="text-lg">From {message.personality.value}</CardTitle>
+                <CardTitle className="text-lg">From {safePersonalityValue(message.personality)}</CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
                   {formatDateTimeForTimezone(message.sent_at, timezone)}
                 </p>
