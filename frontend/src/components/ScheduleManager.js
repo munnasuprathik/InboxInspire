@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Clock, Pause, Play, SkipForward } from "lucide-react";
+import { Clock, Pause, Play, SkipForward, Plus, X, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { TIMEZONES } from "@/utils/timezones";
 import { safeSelectValue } from "@/utils/safeRender";
@@ -33,7 +33,8 @@ export function ScheduleManager({ user, onUpdate }) {
       skip_next: typeof userSchedule.skip_next === 'boolean' ? userSchedule.skip_next : false,
       custom_days: Array.isArray(userSchedule.custom_days) ? userSchedule.custom_days : [],
       custom_interval: typeof userSchedule.custom_interval === 'number' ? userSchedule.custom_interval : 1,
-      monthly_dates: Array.isArray(userSchedule.monthly_dates) ? userSchedule.monthly_dates : []
+      monthly_dates: Array.isArray(userSchedule.monthly_dates) ? userSchedule.monthly_dates : [],
+      send_time_windows: Array.isArray(userSchedule.send_time_windows) ? userSchedule.send_time_windows : []
     };
   });
 
@@ -91,6 +92,33 @@ export function ScheduleManager({ user, onUpdate }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddTimeWindow = () => {
+    if (schedule.send_time_windows.length >= 5) {
+      toast.error("Maximum 5 time windows allowed");
+      return;
+    }
+    setSchedule({
+      ...schedule,
+      send_time_windows: [
+        ...schedule.send_time_windows,
+        { start_time: "09:00", end_time: "17:00", timezone: schedule.timezone || "UTC", max_sends: 1 }
+      ]
+    });
+  };
+
+  const handleRemoveTimeWindow = (index) => {
+    setSchedule({
+      ...schedule,
+      send_time_windows: schedule.send_time_windows.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleUpdateTimeWindow = (index, field, value) => {
+    const newWindows = [...schedule.send_time_windows];
+    newWindows[index] = { ...newWindows[index], [field]: value };
+    setSchedule({ ...schedule, send_time_windows: newWindows });
   };
 
   return (
@@ -201,6 +229,97 @@ export function ScheduleManager({ user, onUpdate }) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Send Time Windows */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label>Send Time Windows (optional, max 5)</Label>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={handleAddTimeWindow}
+              disabled={schedule.send_time_windows.length >= 5}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Time Window
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Define specific time ranges when emails can be sent. If set, only sends during these windows.
+          </p>
+          <div className="space-y-3">
+            {schedule.send_time_windows.map((window, index) => (
+              <Card key={index} className="p-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Start Time</Label>
+                      <Input
+                        type="time"
+                        value={window.start_time}
+                        onChange={(e) => handleUpdateTimeWindow(index, "start_time", e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">End Time</Label>
+                      <Input
+                        type="time"
+                        value={window.end_time}
+                        onChange={(e) => handleUpdateTimeWindow(index, "end_time", e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Timezone</Label>
+                      <Select
+                        value={window.timezone}
+                        onValueChange={(value) => handleUpdateTimeWindow(index, "timezone", value)}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[200px]">
+                          {TIMEZONES.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Max Sends in Window</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={window.max_sends || 1}
+                        onChange={(e) => handleUpdateTimeWindow(index, "max_sends", parseInt(e.target.value) || 1)}
+                        className="h-8"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveTimeWindow(index)}
+                    className="ml-2"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </Card>
+            ))}
+            {schedule.send_time_windows.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                No time windows set. Emails will be sent at scheduled times without time restrictions.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Weekly Schedule (if weekly) */}

@@ -12,18 +12,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk, UserProfile } from "@clerk/clerk-react";
 import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, History, TrendingUp, Globe, RefreshCw, Flame, Star, Loader2, AlertTriangle, Download, Eye, Filter, Database, Search, Calendar, Play, Megaphone, Trophy, Award, Target, Zap, BookOpen, Book, X, Satellite, Goal, Calendar as CalendarIcon, MessageSquare, Wifi, Activity, Settings, CircleDot } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MessageHistory } from "@/components/MessageHistory";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
-import { PersonalityManager } from "@/components/PersonalityManager";
-import { ScheduleManager } from "@/components/ScheduleManager";
+import { GoalsManager } from "@/components/GoalsManager";
 import { StreakCalendar } from "@/components/StreakCalendar";
 import { StreakMilestones } from "@/components/StreakMilestones";
 import { WeeklyMonthlyReports } from "@/components/WeeklyMonthlyReports";
 import { RealTimeAnalytics } from "@/components/RealTimeAnalytics";
 import { AdminUserDetails } from "@/components/AdminUserDetails";
+import { AchievementCelebration } from "@/components/AchievementCelebration";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { SkeletonLoader } from "@/components/SkeletonLoader";
@@ -214,7 +214,17 @@ function OnboardingScreen({ email, onComplete }) {
       personalities: [...formData.personalities, newPersonality],
       currentPersonality: { type: "famous", value: "", customValue: "" }
     });
-    toast.success("Personality added! Add more or continue.");
+    toast.success("✨ Personality Added!", {
+      description: "Great choice! This personality will inspire your daily motivation!",
+      duration: 3000,
+    });
+    
+    setTimeout(() => {
+      toast.success("🎯 Keep Going!", {
+        description: "Add more personalities or continue to complete your setup!",
+        duration: 2500,
+      });
+    }, 500);
   };
 
   const handleFinalSubmit = async () => {
@@ -242,7 +252,32 @@ function OnboardingScreen({ email, onComplete }) {
         schedule
       });
 
-      toast.success("Welcome to InboxInspire!");
+      toast.success("🎉 Welcome to InboxInspire!", {
+        description: "You're all set! Get ready for daily motivation!",
+        duration: 4000,
+      });
+      
+      // Multiple celebratory toasts
+      setTimeout(() => {
+        toast.success("🚀 Let's Begin!", {
+          description: "Your journey to success starts now!",
+          duration: 3000,
+        });
+      }, 600);
+      
+      setTimeout(() => {
+        toast.success("💪 You've Got This!", {
+          description: "We're here to support you every step of the way!",
+          duration: 3000,
+        });
+      }, 1200);
+      
+      setTimeout(() => {
+        toast.success("📧 Check Your Inbox!", {
+          description: "Your first motivational email is coming soon!",
+          duration: 3000,
+        });
+      }, 1800);
       onComplete(response.data.user);
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to complete setup");
@@ -332,8 +367,8 @@ function OnboardingScreen({ email, onComplete }) {
                     {formData.personalities.map((p, i) => {
                       const displayValue = safePersonalityValue(p);
                       return (
-                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
-                        <span className="font-medium">{displayValue}</span>
+                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg gap-2">
+                        <span className="font-medium truncate flex-1 min-w-0">{displayValue}</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -341,6 +376,7 @@ function OnboardingScreen({ email, onComplete }) {
                             ...formData,
                             personalities: formData.personalities.filter((_, idx) => idx !== i)
                           })}
+                          className="flex-shrink-0"
                         >
                           Remove
                         </Button>
@@ -509,10 +545,12 @@ function OnboardingScreen({ email, onComplete }) {
 }
 
 function DashboardScreen({ user, onLogout, onUserUpdate }) {
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const [editMode, setEditMode] = useState(false);
+  const [editAccountMode, setEditAccountMode] = useState(false);
   const [formData, setFormData] = useState({
     name: typeof user.name === 'string' ? user.name : '',
-    goals: typeof user.goals === 'string' ? user.goals : '',
+    goals: typeof user.goals === 'string' ? user.goals : '', // Kept for backward compatibility, not editable in UI
     frequency: typeof user.schedule?.frequency === 'string' ? user.schedule.frequency : 'daily',
     time: user.schedule?.times?.[0] || (typeof user.schedule?.time === 'string' ? user.schedule.time : "09:00"),
     active: typeof user.active === 'boolean' ? user.active : false
@@ -523,6 +561,11 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const [achievements, setAchievements] = useState({ unlocked: [], locked: [], total_unlocked: 0, total_available: 0 });
   const [achievementsLoading, setAchievementsLoading] = useState(false);
   const [messageHistory, setMessageHistory] = useState([]);
+  const [newAchievements, setNewAchievements] = useState([]);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [goals, setGoals] = useState([]);
+  const [goalsLoading, setGoalsLoading] = useState(false);
+  const [goalsRefreshKey, setGoalsRefreshKey] = useState(0);
 
   const userTimezone = user.schedule?.timezone;
   const userScheduleTimeLabel = formatScheduleTime(
@@ -578,17 +621,29 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     fetchMessageHistory();
   }, [fetchMessageHistory, refreshKey]);
 
+  // Fetch goals for overview
+  const fetchGoals = useCallback(async () => {
+    setGoalsLoading(true);
+    try {
+      const response = await axios.get(`${API}/users/${user.email}/goals`);
+      setGoals(response.data.goals || []);
+    } catch (error) {
+      console.error("Failed to fetch goals:", error);
+      setGoals([]);
+    } finally {
+      setGoalsLoading(false);
+    }
+  }, [user.email]);
+
+  useEffect(() => {
+    fetchGoals();
+  }, [fetchGoals, refreshKey, goalsRefreshKey]);
+
   const handleUpdate = async () => {
     setLoading(true);
     try {
       const updates = {
         name: formData.name,
-        goals: formData.goals,
-        schedule: {
-          ...user.schedule,
-          frequency: formData.frequency,
-          times: [formData.time]
-        },
         active: formData.active
       };
 
@@ -599,7 +654,18 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
         handleUserStateUpdate(sanitizedUser);
       }
       setEditMode(false);
-      toast.success("Settings updated!");
+      toast.success("✅ Settings Updated!", {
+        description: "Your preferences have been saved successfully!",
+        duration: 3000,
+      });
+      
+      // Additional celebratory toast
+      setTimeout(() => {
+        toast.success("🎯 All Set!", {
+          description: "Your motivational emails will reflect these changes!",
+          duration: 2500,
+        });
+      }, 500);
     } catch (error) {
       toast.error("Failed to update settings");
     } finally {
@@ -633,7 +699,17 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       if (response.data.used_fallback) {
         toast.warning("Preview generated using a backup message while the AI is busy.");
       } else {
-        toast.success("Preview generated!");
+        toast.success("✨ Preview Generated!", {
+          description: "Here's a sneak peek of your personalized motivation!",
+          duration: 3000,
+        });
+        
+        setTimeout(() => {
+          toast.success("📝 Ready to Send!", {
+            description: "This is how your email will look. Want to send it now?",
+            duration: 3000,
+          });
+        }, 500);
       }
     } catch (error) {
       toast.error("Failed to generate preview");
@@ -646,7 +722,25 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     setLoading(true);
     try {
       await axios.post(`${API}/send-now/${user.email}`);
-      toast.success("Motivation sent to your inbox!");
+      toast.success("📧 Email Sent!", {
+        description: "Check your inbox for your personalized motivation!",
+        duration: 3000,
+      });
+      
+      // Additional celebratory toasts
+      setTimeout(() => {
+        toast.success("💪 You've Got This!", {
+          description: "Your motivation is on its way. Keep pushing forward!",
+          duration: 3000,
+        });
+      }, 600);
+      
+      setTimeout(() => {
+        toast.success("🔥 Stay Strong!", {
+          description: "Every step counts. You're doing amazing!",
+          duration: 2500,
+        });
+      }, 1200);
       await refreshUserData();
     } catch (error) {
       toast.error("Failed to send email");
@@ -672,6 +766,84 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     fetchAchievements();
   }, [fetchAchievements, refreshKey]);
 
+  // Auto-refresh user data every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshUserData();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [refreshUserData]);
+
+  // Auto-refresh goals to update next email countdown
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setGoalsRefreshKey(prev => prev + 1);
+    }, 30000); // Refresh every 30 seconds to update countdown
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle new achievements from analytics
+  const handleNewAchievements = useCallback((achievementIds, analyticsData) => {
+    if (!achievementIds || achievementIds.length === 0) return;
+    
+    // Use detailed achievements from analytics if available
+    let newAchievementDetails = analyticsData.new_achievements_details || [];
+    
+    // If no details, try to get from achievements list
+    if (newAchievementDetails.length === 0 && analyticsData.achievements) {
+      newAchievementDetails = analyticsData.achievements.filter(ach => 
+        achievementIds.includes(ach.id) && ach.unlocked
+      );
+    }
+    
+    // If still no details, fetch from API
+    if (newAchievementDetails.length === 0) {
+      axios.get(`${API}/users/${user.email}/achievements`)
+        .then(response => {
+          const allAchievements = [...(response.data.unlocked || []), ...(response.data.locked || [])];
+          const details = allAchievements.filter(ach => 
+            achievementIds.includes(ach.id) && ach.unlocked
+          );
+          if (details.length > 0) {
+            setNewAchievements(details);
+            setShowCelebration(true);
+            fetchAchievements();
+          }
+        })
+        .catch(error => {
+          console.error("Failed to fetch achievement details:", error);
+          // Fallback: use IDs only
+          if (achievementIds.length > 0) {
+            setNewAchievements(achievementIds.map(id => ({ 
+              id, 
+              name: "Achievement Unlocked!", 
+              description: "Congratulations!",
+              icon_name: "Trophy"
+            })));
+            setShowCelebration(true);
+          }
+        });
+    } else {
+      // We have details, use them directly
+      setNewAchievements(newAchievementDetails);
+      setShowCelebration(true);
+      fetchAchievements();
+    }
+  }, [user.email, fetchAchievements]);
+
+  const handleViewAchievements = useCallback(() => {
+    setShowCelebration(false);
+    // Switch to achievements tab
+    setTimeout(() => {
+      const achievementsTab = document.querySelector('[data-testid="achievements-tab"]');
+      if (achievementsTab) {
+        achievementsTab.click();
+      }
+    }, 100);
+  }, []);
+
   const getAchievementIcon = (iconName) => {
     const iconMap = {
       "Sprout": CheckCircle,
@@ -691,6 +863,14 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
 
   return (
     <div className="min-h-screen p-3 sm:p-4 md:p-8">
+      {/* Achievement Celebration Modal */}
+      <AchievementCelebration
+        achievements={newAchievements}
+        open={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        onViewAchievements={handleViewAchievements}
+      />
+      
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
@@ -716,8 +896,8 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
-          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
-            <TabsList className="inline-flex w-full sm:grid sm:grid-cols-5 min-w-max sm:min-w-0 [&>*]:bg-transparent [&>*[data-state=active]]:bg-white [&>*[data-state=active]]:shadow-sm">
+          <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0 scrollbar-hide">
+            <TabsList className="inline-flex w-full sm:grid sm:grid-cols-5 min-w-max sm:min-w-0 [&>*]:bg-transparent [&>*[data-state=active]]:bg-white [&>*[data-state=active]]:shadow-sm [&>*]:min-h-[44px] sm:[&>*]:min-h-0 [&>*]:touch-manipulation">
               <TabsTrigger value="overview" className="flex-shrink-0">
                 <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
                 <span className="hidden sm:inline">Overview</span>
@@ -750,7 +930,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Activity className="h-4 w-4" />
-                    Status
+                    Email Notifications
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -758,6 +938,9 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     <div className={`h-3 w-3 rounded-full ${statusColor}`} />
                     <span className="text-2xl font-bold">{statusLabel}</span>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {user.active ? "Receiving emails" : "Emails disabled"}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -765,50 +948,163 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Clock className="h-4 w-4" />
-                    Frequency
+                    Next Email
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold capitalize">{user.schedule.frequency}</p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                    <Clock className="h-3 w-3" />
-                    at {userScheduleTimeLabel}
-                    {userTimezoneDisplay && (
-                      <span className="ml-1 text-xs text-gray-500">({userTimezoneDisplay})</span>
-                    )}
-                  </p>
+                  {goalsLoading ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (() => {
+                    // Combine all goals and find the next upcoming email
+                    const allGoals = [...(goals || [])];
+                    if (user.goals && typeof user.goals === 'string' && user.goals.trim()) {
+                      allGoals.unshift({
+                        id: 'main_goal',
+                        title: user.goals.split('\n')[0].substring(0, 50) || 'My Main Goal',
+                        active: !user.schedule?.paused,
+                        next_sends: user.schedule && !user.schedule.paused ? [(() => {
+                          // Calculate next send time for main goal
+                          const schedule = user.schedule;
+                          const timezone = schedule.timezone || 'UTC';
+                          const time = schedule.times?.[0] || schedule.time || '09:00';
+                          const [hours, minutes] = time.split(':').map(Number);
+                          
+                          const now = new Date();
+                          const tzNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+                          const today = new Date(tzNow);
+                          today.setHours(hours, minutes, 0, 0);
+                          
+                          if (today <= tzNow) {
+                            today.setDate(today.getDate() + 1);
+                          }
+                          
+                          return today.toISOString();
+                        })()] : [],
+                        schedules: user.schedule ? [{
+                          timezone: user.schedule.timezone || 'UTC',
+                          active: !user.schedule.paused
+                        }] : []
+                      });
+                    }
+                    
+                    // Find the earliest next send across all active goals
+                    let nextEmail = null;
+                    let nextGoal = null;
+                    
+                    for (const goal of allGoals) {
+                      if (!goal.active) continue;
+                      
+                      if (goal.next_sends && goal.next_sends.length > 0) {
+                        for (const sendTime of goal.next_sends) {
+                          const sendDate = new Date(sendTime);
+                          if (!nextEmail || sendDate < nextEmail) {
+                            nextEmail = sendDate;
+                            nextGoal = goal;
+                          }
+                        }
+                      }
+                    }
+                    
+                    if (nextEmail && nextGoal) {
+                      const now = new Date();
+                      const hoursUntil = Math.max(0, Math.round((nextEmail - now) / (1000 * 60 * 60) * 10) / 10);
+                      const minutesUntil = Math.max(0, Math.round((nextEmail - now) / (1000 * 60)));
+                      
+                      // Format display
+                      let timeDisplay;
+                      if (hoursUntil >= 24) {
+                        const days = Math.floor(hoursUntil / 24);
+                        const hours = Math.floor(hoursUntil % 24);
+                        timeDisplay = days === 1 ? `${days} day` : `${days} days`;
+                        if (hours > 0) {
+                          timeDisplay += ` ${hours}h`;
+                        }
+                      } else if (hoursUntil >= 1) {
+                        timeDisplay = hoursUntil === 1 ? '1 hour' : `${Math.floor(hoursUntil)}h`;
+                        const mins = minutesUntil % 60;
+                        if (mins > 0 && hoursUntil < 2) {
+                          timeDisplay += ` ${mins}m`;
+                        }
+                      } else {
+                        timeDisplay = minutesUntil === 1 ? '1 minute' : `${minutesUntil}m`;
+                      }
+                      
+                      return (
+                        <div>
+                          <p className="text-2xl font-bold">{timeDisplay}</p>
+                          <p className="text-sm text-muted-foreground mt-1 truncate">
+                            {nextGoal.title}
+                          </p>
+                        </div>
+                      );
+                    }
+                    
+                    // No upcoming emails
+                    const activeGoals = allGoals.filter(g => g.active).length;
+                    return (
+                      <div>
+                        <p className="text-sm text-muted-foreground">No upcoming emails</p>
+                        {activeGoals > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activeGoals} active {activeGoals === 1 ? 'goal' : 'goals'}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Personalities
+                    <Trophy className="h-4 w-4" />
+                    Highest Achievement
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-lg font-bold">{user.personalities?.length || 0}</p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1">
-                    <CircleDot className="h-3 w-3 text-green-500" />
-                    active
-                  </p>
+                  {achievementsLoading ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : achievements.unlocked && achievements.unlocked.length > 0 ? (
+                    (() => {
+                      // Get the highest achievement (top 1)
+                      const highestAchievement = achievements.unlocked
+                        .sort((a, b) => {
+                          // Sort by priority (higher first), then by unlocked_at (most recent first)
+                          const priorityDiff = (b.priority || 0) - (a.priority || 0);
+                          if (priorityDiff !== 0) return priorityDiff;
+                          const aDate = a.unlocked_at ? new Date(a.unlocked_at).getTime() : 0;
+                          const bDate = b.unlocked_at ? new Date(b.unlocked_at).getTime() : 0;
+                          return bDate - aDate;
+                        })[0];
+                      
+                      return (
+                        <div className="flex items-center gap-3">
+                          <div className="flex-shrink-0 h-10 w-10 rounded-md bg-muted flex items-center justify-center">
+                            {getAchievementIcon(highestAchievement.icon_name || "Trophy")}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{highestAchievement.name}</p>
+                            {highestAchievement.category && (
+                              <p className="text-xs text-muted-foreground capitalize mt-0.5">{highestAchievement.category}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No achievements yet</p>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Current Goals */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-indigo-600" />
-                  Your Current Goals
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground whitespace-pre-wrap">{user.goals}</p>
-              </CardContent>
-            </Card>
+            {/* Goals Manager */}
+            <GoalsManager user={user} onUpdate={handleUserStateUpdate} />
 
             {/* Preview & Send */}
             <Card>
@@ -843,10 +1139,20 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
+            {/* Your Motivation Streak - First */}
+            <AnalyticsDashboard 
+              email={user.email} 
+              refreshKey={refreshKey}
+              onNewAchievements={handleNewAchievements}
+            />
+            
+            {/* Streak Milestones - Second */}
             <StreakMilestones 
               streakCount={user.streak_count || 0}
               lastEmailSent={user.last_email_sent}
             />
+            
+            {/* Streak Calendar */}
             <StreakCalendar 
               streakCount={user.streak_count || 0}
               totalMessages={user.total_messages_received || 0}
@@ -854,56 +1160,59 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               messageHistory={messageHistory}
               timezone={userTimezone}
             />
-            <AnalyticsDashboard email={user.email} refreshKey={refreshKey} />
+            
+            {/* Weekly/Monthly Reports */}
             <WeeklyMonthlyReports email={user.email} user={user} refreshKey={refreshKey} />
           </TabsContent>
 
-          <TabsContent value="achievements" className="space-y-6">
+          <TabsContent value="achievements" className="space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Trophy className="h-5 w-5 text-yellow-500" />
+              <CardHeader className="pb-3 sm:pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2">
+                  <div className="flex-1">
+                    <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                      <Trophy className="h-5 w-5 text-yellow-500 flex-shrink-0" />
                       Your Achievements
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm mt-1">
                       {achievements.total_unlocked} of {achievements.total_available} unlocked
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-shrink-0">
                     <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={() => exportAchievements(achievements)}
                       disabled={achievementsLoading}
+                      className="flex-1 sm:flex-initial"
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
+                      <Download className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Export</span>
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={fetchAchievements}
                       disabled={achievementsLoading}
+                      className="flex-1 sm:flex-initial"
                     >
-                      <RefreshCw className={`h-4 w-4 mr-2 ${achievementsLoading ? 'animate-spin' : ''}`} />
-                      Refresh
+                      <RefreshCw className={`h-4 w-4 sm:mr-2 ${achievementsLoading ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Refresh</span>
                     </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6">
                 {achievementsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                  <div className="flex items-center justify-center py-8 sm:py-12">
+                    <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-indigo-600" />
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {/* Progress Info */}
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 text-sm">
                       <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">
+                      <span className="font-medium text-base sm:text-sm">
                         {achievements.total_available > 0 
                           ? Math.round((achievements.total_unlocked / achievements.total_available) * 100) 
                           : 0}% ({achievements.total_unlocked} of {achievements.total_available})
@@ -913,29 +1222,29 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     {/* Unlocked Achievements */}
                     {achievements.unlocked.length > 0 && (
                       <div>
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 flex-shrink-0" />
                           Unlocked ({achievements.unlocked.length})
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                           {achievements.unlocked.map((achievement) => (
                             <Card 
                               key={achievement.id} 
                               className="border-2 border-green-500 bg-gradient-to-br from-green-50 to-emerald-50"
                             >
-                              <CardContent className="p-4">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-green-100 rounded-lg text-green-600">
+                              <CardContent className="p-3 sm:p-4">
+                                <div className="flex items-start gap-2 sm:gap-3">
+                                  <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg text-green-600 flex-shrink-0">
                                     {getAchievementIcon(achievement.icon_name)}
                                   </div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h4 className="font-semibold">{achievement.name}</h4>
-                                      <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                                      <h4 className="font-semibold text-sm sm:text-base truncate">{achievement.name}</h4>
+                                      <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-xs w-fit">
                                         Unlocked
                                       </Badge>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">{achievement.description}</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">{achievement.description}</p>
                                     {achievement.category && (
                                       <Badge variant="secondary" className="mt-2 text-xs">
                                         {achievement.category}
@@ -953,29 +1262,29 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     {/* Locked Achievements */}
                     {achievements.locked.length > 0 && (
                       <div>
-                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                          <Award className="h-5 w-5 text-gray-400" />
+                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+                          <Award className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 flex-shrink-0" />
                           Locked ({achievements.locked.length})
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                           {achievements.locked.map((achievement) => (
                             <Card 
                               key={achievement.id} 
                               className="border-2 border-gray-200 bg-gray-50 opacity-75"
                             >
-                              <CardContent className="p-4">
-                                <div className="flex items-start gap-3">
-                                  <div className="p-2 bg-gray-200 rounded-lg text-gray-400">
+                              <CardContent className="p-3 sm:p-4">
+                                <div className="flex items-start gap-2 sm:gap-3">
+                                  <div className="p-1.5 sm:p-2 bg-gray-200 rounded-lg text-gray-400 flex-shrink-0">
                                     {getAchievementIcon(achievement.icon_name)}
                                   </div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h4 className="font-semibold text-gray-600">{achievement.name}</h4>
-                                      <Badge variant="outline" className="bg-gray-100 text-gray-500 border-gray-300">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                                      <h4 className="font-semibold text-sm sm:text-base text-gray-600 truncate">{achievement.name}</h4>
+                                      <Badge variant="outline" className="bg-gray-100 text-gray-500 border-gray-300 text-xs w-fit">
                                         Locked
                                       </Badge>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">{achievement.description}</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">{achievement.description}</p>
                                     {achievement.category && (
                                       <Badge variant="secondary" className="mt-2 text-xs bg-gray-200">
                                         {achievement.category}
@@ -1012,28 +1321,25 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
             />
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-6">
-            <PersonalityManager user={user} onUpdate={handleUserStateUpdate} />
-            <ScheduleManager user={user} onUpdate={handleUserStateUpdate} />
-            
+          <TabsContent value="settings" className="space-y-4 sm:space-y-6">
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Basic Information</CardTitle>
-                    <CardDescription>Update your name and goals</CardDescription>
+              <CardHeader className="pb-3 sm:pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg sm:text-xl">Basic Information</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm mt-1">Update your name and email preferences</CardDescription>
                   </div>
                   {!editMode && (
-                    <Button onClick={() => setEditMode(true)} data-testid="edit-settings-btn">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
+                    <Button onClick={() => setEditMode(true)} data-testid="edit-settings-btn" className="w-full sm:w-auto">
+                      <Edit className="h-4 w-4 sm:mr-2" />
+                      <span className="sm:inline">Edit</span>
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
                 <div>
-                  <Label>Name</Label>
+                  <Label className="text-sm sm:text-base">Name</Label>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -1042,37 +1348,135 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                   />
                 </div>
 
-                <div>
-                  <Label>Goals</Label>
-                  <Textarea
-                    value={formData.goals}
-                    onChange={(e) => setFormData({...formData, goals: e.target.value})}
-                    disabled={!editMode}
-                    className="mt-2 min-h-32"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div>
-                    <Label>Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Receive motivational emails</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 pt-4 border-t">
+                  <div className="flex-1">
+                    <Label className="text-sm sm:text-base">Email Notifications</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Receive motivational emails</p>
                   </div>
                   <Switch
                     checked={formData.active}
                     onCheckedChange={(checked) => setFormData({...formData, active: checked})}
                     disabled={!editMode}
+                    className="flex-shrink-0"
                   />
                 </div>
 
                 {editMode && (
-                  <div className="flex gap-3 pt-4">
-                    <Button variant="outline" onClick={() => setEditMode(false)} className="flex-1">
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                    <Button variant="outline" onClick={() => setEditMode(false)} className="flex-1 sm:flex-initial">
                       Cancel
                     </Button>
-                    <Button onClick={handleUpdate} disabled={loading} className="flex-1" data-testid="save-settings-btn">
+                    <Button onClick={handleUpdate} disabled={loading} className="flex-1 sm:flex-initial" data-testid="save-settings-btn">
                       {loading ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3 sm:pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg sm:text-xl">Account Management</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm mt-1">Manage your account settings, email, password, and security</CardDescription>
+                  </div>
+                  {!editAccountMode && (
+                    <Button onClick={() => setEditAccountMode(true)} variant="outline" size="sm" className="w-full sm:w-auto">
+                      <Edit className="h-4 w-4 sm:mr-2" />
+                      <span className="sm:inline">Edit</span>
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                {!editAccountMode ? (
+                  <>
+                    {!clerkLoaded ? (
+                      <div className="flex items-center justify-center py-6 sm:py-8">
+                        <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        {clerkUser?.imageUrl ? (
+                          <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden border-2 border-border flex-shrink-0">
+                            <img 
+                              src={clerkUser.imageUrl} 
+                              alt={clerkUser.firstName || "User"} 
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-muted flex items-center justify-center border-2 border-border flex-shrink-0">
+                            <User className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-base sm:text-lg truncate">
+                            {clerkUser?.firstName && clerkUser?.lastName 
+                              ? `${clerkUser.firstName} ${clerkUser.lastName}`
+                              : clerkUser?.firstName || clerkUser?.username || user.name || "User"}
+                          </p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
+                            {clerkUser?.primaryEmailAddress?.emailAddress || user.email}
+                          </p>
+                          {clerkUser?.externalAccounts && clerkUser.externalAccounts.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                              {clerkUser.externalAccounts.map((account, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs">
+                                  {account.provider === "google" && "Google"}
+                                  {account.provider === "github" && "GitHub"}
+                                  {account.provider === "facebook" && "Facebook"}
+                                  {!["google", "github", "facebook"].includes(account.provider) && account.provider}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-lg border p-2 sm:p-6 min-h-[400px] sm:min-h-[500px] w-full overflow-hidden">
+                      <SignedIn>
+                        <div className="w-full h-full">
+                          <UserProfile 
+                            appearance={{
+                              elements: {
+                                rootBox: "w-full h-full",
+                                card: "shadow-none border-0 w-full h-full",
+                                navbar: "border-r border-border pr-2 sm:pr-4 min-w-[160px] sm:min-w-[200px]",
+                                page: "pl-2 sm:pl-6 flex-1",
+                                pageScrollBox: "p-0",
+                                navbarButton: "text-foreground hover:bg-muted text-xs sm:text-sm min-h-[44px] sm:min-h-0 px-2 sm:px-4",
+                                navbarButtonActive: "bg-muted text-foreground font-semibold",
+                                formButtonPrimary: "bg-primary text-primary-foreground hover:bg-primary/90 min-h-[44px] sm:min-h-0",
+                              },
+                              variables: {
+                                colorPrimary: "hsl(var(--primary))",
+                              }
+                            }}
+                            routing="hash"
+                          />
+                        </div>
+                      </SignedIn>
+                      <SignedOut>
+                        <div className="flex items-center justify-center py-8 sm:py-12">
+                          <p className="text-sm sm:text-base text-muted-foreground text-center px-4">Please sign in to manage your account</p>
+                        </div>
+                      </SignedOut>
+                    </div>
+                    <div className="flex gap-3 pt-4 border-t">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setEditAccountMode(false)} 
+                        className="flex-1 sm:flex-initial sm:min-w-[120px]"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -1426,7 +1830,24 @@ function AdminDashboard() {
     try {
       const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
       await axios.post(`${API}/admin/achievements`, achievementData, { headers });
-      toast.success("Achievement created successfully");
+      toast.success("🏆 Achievement Created!", {
+        description: "New achievement added! Users can now unlock this milestone!",
+        duration: 4000,
+      });
+      
+      setTimeout(() => {
+        toast.success("✨ Exciting!", {
+          description: "This achievement will motivate users to reach new heights!",
+          duration: 3000,
+        });
+      }, 600);
+      
+      setTimeout(() => {
+        toast.success("🎯 Users Will Love This!", {
+          description: "They'll be excited to unlock this achievement!",
+          duration: 2500,
+        });
+      }, 1200);
       setShowAchievementForm(false);
       setEditingAchievement(null);
       fetchAchievements();
@@ -1439,7 +1860,17 @@ function AdminDashboard() {
     try {
       const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
       await axios.put(`${API}/admin/achievements/${achievementId}`, achievementData, { headers });
-      toast.success("Achievement updated successfully");
+      toast.success("✅ Achievement Updated!", {
+        description: "The achievement has been updated successfully!",
+        duration: 3000,
+      });
+      
+      setTimeout(() => {
+        toast.success("🎯 Changes Saved!", {
+          description: "Users will see the updated achievement details!",
+          duration: 2500,
+        });
+      }, 500);
       setShowAchievementForm(false);
       setEditingAchievement(null);
       fetchAchievements();
@@ -1455,7 +1886,24 @@ function AdminDashboard() {
     try {
       const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
       await axios.delete(`${API}/admin/achievements/${achievementId}?hard_delete=${hardDelete}`, { headers });
-      toast.success(`Achievement ${hardDelete ? 'deleted' : 'deactivated'} successfully`);
+      if (hardDelete) {
+        toast.success("🗑️ Achievement Deleted", {
+          description: "The achievement has been permanently removed from the system.",
+          duration: 3000,
+        });
+      } else {
+        toast.success("⏸️ Achievement Deactivated", {
+          description: "The achievement has been deactivated. Users won't see it anymore.",
+          duration: 3000,
+        });
+        
+        setTimeout(() => {
+          toast.info("💡 Tip", {
+            description: "You can reactivate it anytime if needed!",
+            duration: 2500,
+          });
+        }, 500);
+      }
       fetchAchievements();
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to delete achievement");
@@ -1467,9 +1915,22 @@ function AdminDashboard() {
       const headers = { Authorization: `Bearer ${sessionStorage.getItem('adminToken')}` };
       const response = await axios.post(`${API}/admin/users/${email}/achievements/${achievementId}`, {}, { headers });
       if (response.data.status === "already_assigned") {
-        toast.info("User already has this achievement");
+        toast.info("ℹ️ Already Assigned", {
+          description: "This user already has this achievement!",
+          duration: 3000,
+        });
       } else {
-        toast.success("Achievement assigned successfully");
+        toast.success("🎉 Achievement Assigned!", {
+          description: "The user has been awarded this achievement!",
+          duration: 3000,
+        });
+        
+        setTimeout(() => {
+          toast.success("✨ They'll Love It!", {
+            description: "This will make their day!",
+            duration: 2500,
+          });
+        }, 500);
       }
       setSelectedUserForAchievement(null);
     } catch (error) {
@@ -1604,6 +2065,20 @@ function AdminDashboard() {
       fetchAdminData(storedToken);
     }
   }, []);
+
+  // Auto-refresh admin data every 30 seconds when authenticated
+  useEffect(() => {
+    if (!authenticated) return;
+    
+    const storedToken = sessionStorage.getItem('adminToken');
+    if (!storedToken) return;
+
+    const interval = setInterval(() => {
+      fetchAdminData(storedToken);
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [authenticated]);
 
   // Auto-load message history when tab is accessed
   useEffect(() => {

@@ -2,35 +2,60 @@ import { useState, useEffect, useCallback } from "react";
 import React from "react";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Flame, TrendingUp, Star, BarChart3 } from "lucide-react";
+import { Flame, TrendingUp, Star, BarChart3, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { retryWithBackoff } from "@/utils/retry";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email, refreshKey = 0 }) {
+export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email, refreshKey = 0, onNewAchievements }) {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const fetchAnalytics = useCallback(async () => {
+  const fetchAnalytics = useCallback(async (showLoading = true) => {
+    if (showLoading) {
     setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     try {
       const response = await retryWithBackoff(async () => {
         return await axios.get(`${API}/users/${email}/analytics`);
       });
       setAnalytics(response.data);
+      setLastRefresh(new Date());
+      
+      // Check for new achievements and notify parent
+      if (response.data.new_achievements && response.data.new_achievements.length > 0 && onNewAchievements) {
+        // Use detailed achievements if available, otherwise use IDs
+        const achievementData = response.data.new_achievements_details || response.data.new_achievements;
+        onNewAchievements(response.data.new_achievements, response.data);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to load analytics");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [email]);
+  }, [email, onNewAchievements]);
 
   useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics, refreshKey]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAnalytics(false); // Silent refresh
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchAnalytics]);
 
   if (loading) {
     return <SkeletonLoader variant="card" count={4} />;
@@ -42,20 +67,45 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card data-testid="streak-card">
+      {/* Header with Refresh Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Your Analytics</h2>
+          <p className="text-sm text-muted-foreground">
+            Last updated: {lastRefresh.toLocaleTimeString()}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fetchAnalytics(false)}
+          disabled={refreshing}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Your Motivation Streak - Prominent at Top */}
+      <Card data-testid="streak-card" className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 shadow-lg">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Flame className="h-4 w-4 text-orange-500" />
-              Current Streak
+          <CardTitle className="text-base font-semibold flex items-center gap-2 text-orange-900">
+            <Flame className="h-5 w-5 text-orange-500 animate-pulse" />
+            Your Motivation Streak
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{analytics.streak_count}</p>
-            <p className="text-xs text-muted-foreground mt-1">consecutive days</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-5xl font-bold text-orange-600">{analytics.streak_count}</p>
+            <p className="text-lg text-orange-700 font-medium">days</p>
+          </div>
+          <p className="text-sm text-orange-600 mt-2 font-medium">🔥 Keep the fire burning!</p>
+          <p className="text-xs text-muted-foreground mt-1">Consecutive days of motivation</p>
           </CardContent>
         </Card>
+
+      {/* Other Key Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
 
         <Card data-testid="total-messages-card">
           <CardHeader className="pb-3">

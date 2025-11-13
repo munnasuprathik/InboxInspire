@@ -59,6 +59,16 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
     fetchFavorites();
   }, [email, refreshKey, fetchMessages, fetchFavorites]);
 
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchMessages();
+      fetchFavorites();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [fetchMessages, fetchFavorites]);
+
   // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -219,9 +229,9 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
           <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 min-w-0">
                   <User className="h-4 w-4 text-[#6B4EFF] flex-shrink-0" />
-                  <CardTitle className="text-base sm:text-lg">From {message.personality.value}</CardTitle>
+                  <CardTitle className="text-base sm:text-lg truncate min-w-0">From {message.personality?.value || "Unknown"}</CardTitle>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="h-3 w-3" />
@@ -281,23 +291,23 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                   {message.rating ? 'Update Rating' : 'Rate This Message'}
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="w-[95vw] sm:w-full p-4 sm:p-6">
                 <DialogHeader>
-                  <DialogTitle>Rate This Message</DialogTitle>
+                  <DialogTitle className="text-lg sm:text-xl">Rate This Message</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 pt-4">
+                <div className="space-y-4 sm:space-y-6 pt-3 sm:pt-4">
                   <div>
-                    <label className="text-sm font-medium mb-2 block">How inspiring was this message?</label>
-                    <div className="flex gap-2">
+                    <label className="text-sm sm:text-base font-medium mb-3 sm:mb-2 block">How inspiring was this message?</label>
+                    <div className="flex gap-2 sm:gap-3 justify-center sm:justify-start">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
                           key={star}
                           onClick={() => setRating(star)}
-                          className="transition-transform hover:scale-110"
+                          className="transition-transform hover:scale-110 active:scale-95 touch-manipulation min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
                           data-testid={`star-${star}`}
                         >
                           <Star 
-                            className={`h-8 w-8 ${
+                            className={`h-10 w-10 sm:h-8 sm:w-8 ${
                               star <= rating 
                                 ? 'fill-yellow-400 text-yellow-400' 
                                 : 'text-gray-300'
@@ -308,24 +318,25 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Additional Feedback (Optional)</label>
+                    <label className="text-sm sm:text-base font-medium mb-2 block">Additional Feedback (Optional)</label>
                     <Textarea
                       placeholder="What did you like or what could be improved?"
                       value={feedbackText}
                       onChange={(e) => setFeedbackText(e.target.value)}
-                      rows={3}
+                      rows={4}
+                      className="min-h-[100px] sm:min-h-[80px]"
                     />
                   </div>
                   <Button 
                     onClick={submitFeedback} 
                     disabled={submitting || rating === 0}
-                    className="w-full min-h-[44px] bg-[#6B4EFF] hover:bg-[#5B3EEF]"
+                    className="w-full min-h-[44px] sm:min-h-0 bg-[#6B4EFF] hover:bg-[#5B3EEF] active:bg-[#4B2EDF]"
                     data-testid="submit-feedback-btn"
                   >
                     {submitting ? (
                       <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Submitting...
+                        <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+                        <span className="sm:inline">Submitting...</span>
                       </>
                     ) : (
                       'Submit Feedback'

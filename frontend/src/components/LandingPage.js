@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Sparkles, Clock, Users, Zap, CheckCircle, Star, TrendingUp, Brain, Heart, Target, ArrowRight, Play, Flame, MessageSquare } from 'lucide-react';
+import { Mail, Sparkles, Clock, Users, Zap, CheckCircle, Star, TrendingUp, Brain, Heart, Target, ArrowRight, Play } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -123,18 +123,14 @@ export function LandingPage({ onNavigate }) {
                       <Star className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500 mb-2 flex items-center gap-1">
-                        <Flame className="h-4 w-4 text-orange-500" /> 15 Day Streak
-                      </p>
-                      <p className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                        Hey Sarah! <Sparkles className="h-4 w-4 text-indigo-500" />
-                      </p>
+                      <p className="text-sm text-gray-500 mb-2">🔥 15 Day Streak</p>
+                      <p className="font-semibold text-gray-900 mb-2">Hey Sarah! 👋</p>
                       <p className="text-gray-700 text-sm leading-relaxed">
                         Remember when you thought launching that side project was impossible? 
                         You're 15 days in now. That's 15 days of showing up when it was easier to quit...
                       </p>
-                      <p className="text-indigo-600 text-sm mt-3 font-medium flex items-center gap-1">
-                        <MessageSquare className="h-4 w-4" /> What's one small win from yesterday?
+                      <p className="text-indigo-600 text-sm mt-3 font-medium">
+                        💭 What's one small win from yesterday?
                       </p>
                     </div>
                   </div>

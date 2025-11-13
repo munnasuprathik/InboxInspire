@@ -66,17 +66,6 @@ export const StreakMilestones = React.memo(function StreakMilestones({ streakCou
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Current Streak Display */}
-          <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border-2 border-indigo-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Current Streak</p>
-                <p className="text-3xl font-bold text-indigo-600">{milestones.currentStreak} days</p>
-              </div>
-              <Flame className="h-12 w-12 text-orange-500" />
-            </div>
-          </div>
-
           {/* Next Milestone */}
           {milestones.nextMilestone && (
             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
