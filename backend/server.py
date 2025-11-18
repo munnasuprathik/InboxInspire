@@ -9592,12 +9592,14 @@ async def lifespan(app: FastAPI):
         # NEW: Add email reply polling job
         try:
             from backend.email_reply_handler import poll_email_replies
-            from backend.config import get_env
+            import os
             
-            # Check if IMAP credentials are configured
-            imap_host = get_env("IMAP_HOST")
-            inbox_email = get_env("INBOX_EMAIL")
-            inbox_password = get_env("INBOX_PASSWORD")
+            # Check if IMAP credentials are configured (optional - use os.getenv with None default)
+            # Using os.getenv() instead of get_env() because these are optional variables
+            # get_env() raises RuntimeError when no default is provided, which would break startup
+            imap_host = os.getenv("IMAP_HOST")
+            inbox_email = os.getenv("INBOX_EMAIL")
+            inbox_password = os.getenv("INBOX_PASSWORD")
             
             if all([imap_host, inbox_email, inbox_password]):
                 scheduler.add_job(
