@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tend-backend
+  labels:
+    app: tend-backend
+spec:
+  replicas: 2  # Run 2 instances for high availability
+  selector:
+    matchLabels:
+      app: tend-backend
+  template:
+    metadata:
+      labels:
+        app: tend-backend
+    spec:
+      containers:
+      - name: backend
+        image: your-registry/tend-backend:latest  # Update with your container registry
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Required environment variables
+        - name: MONGO_URL
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: mongo-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: openai-api-key
+        - name: SMTP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: smtp-host
+        - name: SMTP_PORT
+          value: "465"
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: smtp-username
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: smtp-password
+        - name: CLERK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: clerk-secret-key
+        - name: ADMIN_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: admin-secret
+        - name: FRONTEND_URL
+          value: "https://maketend.com"
+        - name: CORS_ORIGINS
+          value: "https://maketend.com,https://*.vercel.app"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PORT
+          value: "8000"
+        # Optional environment variables
+        - name: TAVILY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: tavily-api-key
+              optional: true
+        - name: IMAP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: imap-host
+              optional: true
+        - name: INBOX_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: inbox-email
+              optional: true
+        - name: INBOX_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: tend-secrets
+              key: inbox-password
+              optional: true
+        - name: EMAIL_DOMAIN
+          value: "maketend.com"
+        - name: DB_NAME
+          value: "tend"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      restartPolicy: Always
+

@@ -1,0 +1,31 @@
+# Ingress for external access (if using ingress controller)
+# Update with your domain and TLS certificate
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tend-backend-ingress
+  annotations:
+    # For NGINX Ingress Controller
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # For cert-manager (automatic TLS)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.maketend.com
+    secretName: tend-backend-tls
+  rules:
+  - host: api.maketend.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: tend-backend-service
+            port:
+              number: 80
+
