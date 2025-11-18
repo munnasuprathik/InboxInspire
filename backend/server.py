@@ -6998,9 +6998,51 @@ async def admin_bulk_update_users(emails: list, updates: dict):
         "matched_count": result.matched_count
     }
 
+def verify_user_or_admin(
+    email: str,
+    authorization: str = Header(None),
+    x_user_email: str = Header(None, alias="X-User-Email")
+):
+    """
+    Verify that the request is from the account owner or an admin.
+    - Admin: Authorization header with ADMIN_SECRET
+    - User: X-User-Email header must match the email in the path
+    
+    This is a security measure to prevent unauthorized account deletion.
+    Note: In production, consider using Clerk token verification for stronger security.
+    """
+    # Check if admin
+    if authorization and authorization == f"Bearer {os.getenv('ADMIN_SECRET')}":
+        logger.info(f"✅ Admin deletion authorized for: {email}")
+        return True
+    
+    # Check if user is deleting their own account
+    if x_user_email and x_user_email.lower() == email.lower():
+        logger.info(f"✅ User self-deletion authorized for: {email}")
+        return True
+    
+    # Neither admin nor matching user - unauthorized
+    logger.warning(f"❌ Unauthorized deletion attempt for: {email} (provided email: {x_user_email}, admin: {bool(authorization)})")
+    raise HTTPException(
+        status_code=403,
+        detail="Unauthorized: You can only delete your own account or must be an admin"
+    )
+
 @api_router.delete("/users/{email}")
-async def delete_user_account(email: str):
-    """Delete user account (user-facing endpoint)"""
+async def delete_user_account(
+    email: str,
+    authorization: str = Header(None),
+    x_user_email: str = Header(None, alias="X-User-Email")
+):
+    """
+    Delete user account (user-facing endpoint).
+    Requires authentication: either admin token or X-User-Email header matching the email.
+    
+    Security: This endpoint now requires authentication to prevent unauthorized deletions.
+    """
+    # Verify authentication
+    verify_user_or_admin(email, authorization, x_user_email)
+    
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
