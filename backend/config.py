@@ -64,7 +64,7 @@ OPTIONAL_ENV_VARS = [
 
 # Required for production (warnings if missing)
 PRODUCTION_ENV_VARS = [
-    "FRONTEND_URL",  # Required for email links and CORS
+    "FRONTEND_URL",  # Required for email links and CORS - set to your Vercel frontend URL
 ]
 
 

@@ -8717,29 +8717,44 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 # Dynamic CORS configuration
-# Supports multiple origins for Vercel deployments
+# Supports FRONTEND_URL from environment and CORS_ORIGINS for multiple origins
 def is_allowed_origin(origin: str) -> bool:
-    """Check if origin is allowed, supporting Vercel preview deployments"""
+    """Check if origin is allowed, supporting FRONTEND_URL and CORS_ORIGINS"""
     if not origin:
         return False
     
-    cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
+    # Get FRONTEND_URL from environment (primary source)
+    frontend_url = os.environ.get('FRONTEND_URL', '').strip()
     
-    # Allow all origins if set to '*'
-    if cors_origins_env == '*':
-        return True
+    # Get CORS_ORIGINS from environment (for multiple origins)
+    cors_origins_env = os.environ.get('CORS_ORIGINS', '').strip()
     
-    # Get allowed origins list
-    allowed_origins = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+    # Build allowed origins list
+    allowed_origins = []
+    
+    # Add FRONTEND_URL if set
+    if frontend_url:
+        allowed_origins.append(frontend_url.rstrip('/'))
+    
+    # Add CORS_ORIGINS if set (comma-separated list)
+    if cors_origins_env:
+        if cors_origins_env == '*':
+            # Allow all origins in development only
+            if os.environ.get('ENVIRONMENT') != 'production':
+                return True
+        else:
+            # Parse comma-separated origins
+            allowed_origins.extend([o.strip().rstrip('/') for o in cors_origins_env.split(',') if o.strip()])
     
     # Check exact match
-    if origin in allowed_origins:
+    origin_clean = origin.rstrip('/')
+    if origin_clean in allowed_origins:
         return True
     
     # Check Vercel preview deployments (*.vercel.app pattern)
     if origin.endswith('.vercel.app'):
-        # Check if *.vercel.app is in allowed origins
-        if any('*.vercel.app' in allowed or 'vercel.app' in allowed for allowed in allowed_origins):
+        # Allow if FRONTEND_URL is a vercel.app domain or CORS_ORIGINS includes vercel.app
+        if any('vercel.app' in allowed for allowed in allowed_origins):
             return True
     
     # Always allow localhost in development

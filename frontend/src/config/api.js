@@ -3,9 +3,13 @@
  * All URLs are environment-based - NO hardcoded URLs
  * 
  * Environment Variable Priority:
- * 1. REACT_APP_BACKEND_URL (required in production)
- * 2. VERCEL_BACKEND_URL (Vercel-specific, optional)
- * 3. Development fallback (localhost only)
+ * 1. REACT_APP_BACKEND_URL (REQUIRED in production)
+ * 2. Development fallback (localhost only in development)
+ * 
+ * Production Setup:
+ * - Set REACT_APP_BACKEND_URL in Vercel environment variables
+ * - Example: https://your-backend-api.com
+ * - NO trailing slash
  */
 
 // Cache for computed URLs (lazy initialization)
@@ -22,22 +26,8 @@ const getBackendUrl = () => {
   // Check for explicit backend URL (REQUIRED in production)
   const explicitUrl = process.env.REACT_APP_BACKEND_URL;
   
-  if (explicitUrl) {
-    _backendUrl = explicitUrl.replace(/\/$/, ''); // Remove trailing slash
-    return _backendUrl;
-  }
-  
-  // In Vercel, check for Vercel-specific variable
-  if (process.env.VERCEL) {
-    const vercelBackendUrl = process.env.VERCEL_BACKEND_URL;
-    if (vercelBackendUrl) {
-      _backendUrl = vercelBackendUrl.replace(/\/$/, '');
-      return _backendUrl;
-    }
-    // If in Vercel but no backend URL set, show warning and use fallback
-    console.error('❌ REACT_APP_BACKEND_URL or VERCEL_BACKEND_URL must be set in Vercel environment variables');
-    // Don't throw - use fallback instead to prevent app crash
-    _backendUrl = 'http://localhost:8000'; // Fallback for graceful degradation
+  if (explicitUrl && explicitUrl.trim()) {
+    _backendUrl = explicitUrl.trim().replace(/\/$/, ''); // Remove trailing slash and whitespace
     return _backendUrl;
   }
   
@@ -48,10 +38,10 @@ const getBackendUrl = () => {
     return _backendUrl;
   }
   
-  // Production without URL configured - use fallback with warning instead of throwing
-  // This allows the app to load and show a user-friendly error message
-  console.error('❌ REACT_APP_BACKEND_URL must be set in production. Using fallback.');
-  _backendUrl = ''; // Empty string as fallback - components should handle this gracefully
+  // Production without URL configured - show clear error
+  console.error('❌ REACT_APP_BACKEND_URL must be set in production environment variables');
+  console.error('   Set it in Vercel: Settings → Environment Variables → Add REACT_APP_BACKEND_URL');
+  _backendUrl = ''; // Empty string - components should handle this gracefully
   return _backendUrl;
 };
 
@@ -68,15 +58,9 @@ const getFrontendUrl = () => {
     return _frontendUrl;
   }
   
-  // Server-side: use environment variable
+  // Server-side: use environment variable (for SSR if needed)
   if (process.env.REACT_APP_FRONTEND_URL) {
-    _frontendUrl = process.env.REACT_APP_FRONTEND_URL;
-    return _frontendUrl;
-  }
-  
-  // Vercel automatically sets VERCEL_URL
-  if (process.env.VERCEL_URL) {
-    _frontendUrl = `https://${process.env.VERCEL_URL}`;
+    _frontendUrl = process.env.REACT_APP_FRONTEND_URL.trim().replace(/\/$/, '');
     return _frontendUrl;
   }
   
@@ -99,9 +83,13 @@ export const API_CONFIG = {
   },
 };
 
-// Log configuration in development
+// Log configuration in development only (never in production)
 if (process.env.NODE_ENV === 'development') {
-  console.log('🔧 API Configuration:', API_CONFIG);
+  console.log('🔧 API Configuration:', {
+    BACKEND_URL: API_CONFIG.BACKEND_URL,
+    FRONTEND_URL: API_CONFIG.FRONTEND_URL,
+    API_BASE: API_CONFIG.API_BASE
+  });
 }
 
 export default API_CONFIG;
