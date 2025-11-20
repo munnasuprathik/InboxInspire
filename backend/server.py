@@ -8746,6 +8746,7 @@ def is_allowed_origin(origin: str) -> bool:
             # Parse comma-separated origins
             allowed_origins.extend([o.strip().rstrip('/') for o in cors_origins_env.split(',') if o.strip()])
     
+    
     # Check exact match
     origin_clean = origin.rstrip('/')
     if origin_clean in allowed_origins:

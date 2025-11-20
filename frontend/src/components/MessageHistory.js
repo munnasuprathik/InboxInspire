@@ -4,7 +4,8 @@ import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LiquidButton as Button } from "@/components/animate-ui/components/buttons/liquid";
 import { Input } from "@/components/ui/input";
-import { Star, MessageSquare, Loader2, User, Clock, Search, X, Heart, Download, Reply, CheckCircle2, Filter, Calendar } from "lucide-react";
+import { Star, MessageSquare, Loader2, User, Clock, Search, X, Heart, Download, Reply, CheckCircle2, Filter, Calendar, Grid3x3, List, Archive } from "lucide-react";
+import { SwipeableMessageCard } from "./SwipeableMessageCard";
 import { exportMessageHistory } from "@/utils/exportData";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,11 @@ import { cn } from "@/lib/utils";
 import API_CONFIG from '@/config/api';
 const API = API_CONFIG.API_BASE;
 
+// Log API config for debugging
+if (process.env.NODE_ENV === 'development') {
+  console.log('MessageHistory API:', API);
+}
+
 export const MessageHistory = React.memo(function MessageHistory({ email, timezone, refreshKey = 0, onFeedbackSubmitted }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,12 +38,27 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
   const [filterRating, setFilterRating] = useState(null);
   const [favoriteMessages, setFavoriteMessages] = useState([]);
   const [stats, setStats] = useState({ sent_count: 0, reply_count: 0 });
+  const [viewMode, setViewMode] = useState('swipe'); // 'list' | 'swipe' - Default to swipe for better UX
+  const [archivedMessages, setArchivedMessages] = useState([]);
 
   const fetchMessages = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Check if API is configured
+      if (!API || API === '/api') {
+        console.error('API not configured. Backend URL:', API_CONFIG.BACKEND_URL);
+        toast.error("Backend API not configured. Please check your environment variables.");
+        setLoading(false);
+        return;
+      }
+      
       const response = await retryWithBackoff(async () => {
-        return await axios.get(`${API}/users/${email}/message-history`);
+        // URL encode email to handle special characters
+        const encodedEmail = encodeURIComponent(email);
+        return await axios.get(`${API}/users/${encodedEmail}/message-history`, {
+          timeout: 10000,
+        });
       });
       setMessages(response.data.messages || []);
       setStats({
@@ -45,7 +66,12 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
         reply_count: response.data.reply_count || 0
       });
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to load messages");
+      console.error('Fetch messages error:', error);
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        toast.error(`Cannot connect to backend at ${API_CONFIG.BACKEND_URL}. Is the server running?`);
+      } else {
+        toast.error(error.response?.data?.detail || "Failed to load messages");
+      }
     } finally {
       setLoading(false);
     }
@@ -53,10 +79,13 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
 
   const fetchFavorites = useCallback(async () => {
     try {
-      const user = await axios.get(`${API}/users/${email}`);
+      // URL encode email to handle special characters
+      const encodedEmail = encodeURIComponent(email);
+      const user = await axios.get(`${API}/users/${encodedEmail}`);
       setFavoriteMessages(user.data.favorite_messages || []);
     } catch (error) {
       // Silently fail - favorites are optional
+      console.error('Failed to fetch favorites:', error);
     }
   }, [email]);
 
@@ -86,18 +115,105 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
 
   const toggleFavorite = async (messageId) => {
     try {
-      const response = await axios.post(`${API}/users/${email}/messages/${messageId}/favorite`);
+      // Check if API is configured
+      if (!API || API === '/api') {
+        const backendUrl = API_CONFIG.BACKEND_URL || 'http://localhost:8000';
+        toast.error(`Backend API not configured. Expected: ${backendUrl}/api`);
+        throw new Error("API not configured");
+      }
+
+      // URL encode email and messageId to handle special characters
+      const encodedEmail = encodeURIComponent(email);
+      const encodedMessageId = encodeURIComponent(messageId);
+      const apiUrl = `${API}/users/${encodedEmail}/messages/${encodedMessageId}/favorite`;
+      
+      console.log('Calling favorite API:', apiUrl);
+      console.log('Email:', email, 'MessageId:', messageId);
+
+      const response = await axios.post(
+        apiUrl,
+        {},
+        {
+          timeout: 10000, // 10 second timeout
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+        }
+      );
+      
+      // Check for error response
+      if (response.status >= 400) {
+        throw new Error(response.data?.detail || `Server returned ${response.status}`);
+      }
+      
+      const isFavorite = response.data.is_favorite;
+      
       setFavoriteMessages(prev => {
-        if (response.data.is_favorite) {
-          return [...prev, messageId];
+        if (isFavorite) {
+          // Add to favorites if not already there
+          if (!prev.includes(messageId)) {
+            return [...prev, messageId];
+          }
+          return prev;
         } else {
+          // Remove from favorites
           return prev.filter(id => id !== messageId);
         }
       });
-      toast.success(response.data.is_favorite ? "Added to favorites" : "Removed from favorites");
+      
+      toast.success(isFavorite ? "Added to favorites" : "Removed from favorites");
+      return response.data; // Return the response so the card can use it
     } catch (error) {
-      toast.error("Failed to update favorite");
+      console.error("Favorite error details:", {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: apiUrl,
+        email: email,
+        messageId: messageId
+      });
+      
+      // Better error messages
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error("Request timed out. Please check your connection and ensure the backend is running.");
+      } else if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        const backendUrl = API_CONFIG.BACKEND_URL || 'http://localhost:8000';
+        console.error('Network Error Details:', {
+          backendUrl,
+          apiUrl,
+          errorCode: error.code,
+          errorMessage: error.message,
+          stack: error.stack
+        });
+        toast.error(
+          `Cannot connect to backend at ${backendUrl}. ` +
+          "Please check: 1) Backend is running, 2) CORS is configured, 3) URL is correct. " +
+          "Check browser console for details.",
+          { duration: 10000 }
+        );
+      } else if (error.response) {
+        // Server responded with error
+        const errorDetail = error.response?.data?.detail || error.response?.data?.message || `Status ${error.response.status}`;
+        toast.error(`Failed to update favorite: ${errorDetail}`);
+        console.error('Server error response:', error.response.data);
+      } else {
+        toast.error(`Failed to update favorite: ${error.message || 'Unknown error'}`);
+      }
+      
+      throw error; // Re-throw so the card can handle the error
     }
+  };
+
+  const handleArchive = (messageId) => {
+    setArchivedMessages(prev => [...prev, messageId]);
+    toast.success("Message archived");
+  };
+
+  const handleUnarchive = (messageId) => {
+    setArchivedMessages(prev => prev.filter(id => id !== messageId));
+    toast.success("Message unarchived");
   };
 
   // Group messages with their replies
@@ -154,10 +270,11 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
         (message.replies?.some(r => r.message?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())));
       
       const matchesRating = filterRating === null || message.rating === filterRating;
+      const notArchived = !archivedMessages.includes(message.id);
       
-      return matchesSearch && matchesRating;
+      return matchesSearch && matchesRating && notArchived;
     });
-  }, [groupedMessages, debouncedSearchQuery, filterRating]);
+  }, [groupedMessages, debouncedSearchQuery, filterRating, archivedMessages]);
 
   // Group messages by date
   const messagesByDate = useMemo(() => {
@@ -216,7 +333,9 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
 
     setSubmitting(true);
     try {
-      await axios.post(`${API}/users/${email}/feedback`, {
+      // URL encode email to handle special characters
+      const encodedEmail = encodeURIComponent(email);
+      await axios.post(`${API}/users/${encodedEmail}/feedback`, {
         message_id: selectedMessage?.id,
         rating,
         feedback_text: feedbackText,
@@ -272,7 +391,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 sm:gap-2.5">
                   <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
-                    <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
+                    <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                   </div>
                   <p className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider">Total Messages</p>
                 </div>
@@ -286,7 +405,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                       style={{ width: `${Math.min(100, (stats.sent_count / 100) * 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground font-medium">All time</p>
+                  <p className="text-xs text-muted-foreground font-medium">All time</p>
                 </div>
               </div>
             </CardContent>
@@ -297,7 +416,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 sm:gap-2.5">
                   <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/10 border border-green-500/20 group-hover:bg-green-500/15 transition-colors">
-                    <Reply className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />
+                    <Reply className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                   </div>
                   <p className="text-xs font-semibold text-green-600/70 dark:text-green-400/70 uppercase tracking-wider">Replies</p>
                 </div>
@@ -311,7 +430,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                       style={{ width: `${stats.sent_count > 0 ? Math.min(100, (stats.reply_count / stats.sent_count) * 100) : 0}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground font-medium">
+                  <p className="text-xs text-muted-foreground font-medium">
                     {stats.sent_count > 0 ? `${Math.round((stats.reply_count / stats.sent_count) * 100)}% rate` : 'No replies'}
                   </p>
                 </div>
@@ -324,7 +443,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 sm:gap-2.5">
                   <div className="p-1.5 sm:p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/15 transition-colors">
-                    <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
+                    <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
                   </div>
                   <p className="text-xs font-semibold text-purple-600/70 dark:text-purple-400/70 uppercase tracking-wider">Showing</p>
                 </div>
@@ -338,7 +457,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                       style={{ width: `${messages.length > 0 ? Math.min(100, (filteredMessages.length / messages.length) * 100) : 0}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground font-medium">
+                  <p className="text-xs text-muted-foreground font-medium">
                     {filteredMessages.length === messages.length ? 'All' : 'Filtered'}
                   </p>
                 </div>
@@ -347,13 +466,63 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
           </Card>
         </div>
 
+      {/* Archived Messages Section */}
+      {archivedMessages.length > 0 && (
+        <Card className="border border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-red-500/5">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Archive className="h-5 w-5 text-orange-600" />
+                <div>
+                  <p className="font-semibold text-foreground">Archived Messages</p>
+                  <p className="text-sm text-muted-foreground">{archivedMessages.length} message{archivedMessages.length !== 1 ? 's' : ''} archived</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setArchivedMessages([])}
+                className="h-9"
+              >
+                Clear All
+              </Button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {messages.filter(m => archivedMessages.includes(m.id)).map((message) => (
+                <div
+                  key={message.id}
+                  className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {message.personality?.value || "Unknown"} - {formatDateTimeForTimezone(message.sent_at, timezone)}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
+                      {message.message?.substring(0, 100)}...
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleUnarchive(message.id)}
+                    className="ml-2 h-8"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filters and Search */}
       <Card className="border border-border/30 hover:border-border/50 transition-all duration-300">
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search */}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
               <Input
                 placeholder="Search messages, personalities, or content..."
                 value={searchQuery}
@@ -365,7 +534,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                   onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <X className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
               )}
             </div>
@@ -374,7 +543,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
             <Select value={filterRating?.toString() || "all"} onValueChange={(value) => setFilterRating(value === "all" ? null : Number(value))}>
               <SelectTrigger className="w-full sm:w-[180px] h-10">
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                  <Star className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                   <SelectValue placeholder="Filter by rating" />
                 </div>
               </SelectTrigger>
@@ -389,13 +558,59 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
               </SelectContent>
             </Select>
 
+            {/* View Mode Toggle - Enhanced */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <div className="flex items-center gap-2 border-2 border-border/60 rounded-lg p-1 bg-muted/50 backdrop-blur-sm shadow-sm">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={cn(
+                    "px-3 py-2 rounded-md transition-all duration-200 flex items-center gap-2 text-sm font-medium",
+                    viewMode === 'list'
+                      ? "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  )}
+                  title="List View"
+                >
+                  <List className="h-4 w-4" />
+                  <span className="hidden sm:inline">List</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('swipe')}
+                  className={cn(
+                    "px-3 py-2 rounded-md transition-all duration-200 flex items-center gap-2 text-sm font-medium relative",
+                    viewMode === 'swipe'
+                      ? "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  )}
+                  title="Swipe View - Swipe right to favorite, left to archive"
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Swipe</span>
+                  {viewMode === 'swipe' && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                  )}
+                </button>
+              </div>
+              {viewMode === 'swipe' && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-primary/5 px-2 py-1 rounded-md border border-primary/20">
+                  <Heart className="h-3 w-3 text-green-500" />
+                  <span className="hidden sm:inline">Swipe right</span>
+                  <span className="sm:hidden">→</span>
+                  <span className="hidden sm:inline">•</span>
+                  <Archive className="h-3 w-3 text-orange-500" />
+                  <span className="hidden sm:inline">Swipe left</span>
+                  <span className="sm:hidden">←</span>
+                </div>
+              )}
+            </div>
+
             {/* Export Button */}
             <Button
               variant="outline"
               onClick={() => exportMessageHistory(messages)}
               className="h-11 sm:h-10 shrink-0 touch-manipulation"
             >
-              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <Download className="h-4 w-4 sm:h-5 sm:w-5" />
               <span className="hidden sm:inline">Export</span>
             </Button>
           </div>
@@ -415,7 +630,117 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
             </div>
           </CardContent>
         </Card>
+      ) : viewMode === 'swipe' ? (
+        /* Swipeable Cards View */
+        <div className="space-y-6">
+          {/* Swipe View Header Banner */}
+          <Card className="border-2 border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 border border-primary/30">
+                    <Grid3x3 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Swipe Mode Active</h3>
+                    <p className="text-sm text-muted-foreground">Drag cards left or right to interact</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="h-9"
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Switch to List
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {messagesByDate.map(([dateGroup, messages]) => (
+            <div key={dateGroup} className="space-y-6">
+              {/* Date Group Header */}
+              <div className="flex items-center gap-2 sm:gap-3 sticky top-0 z-10 bg-background/80 backdrop-blur-sm py-2 -mt-2">
+                <div className="h-px flex-1 bg-border" />
+                <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 flex-shrink-0">
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+                  <span className="text-xs sm:text-sm font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{dateGroup}</span>
+                  <Badge variant="secondary" className="text-xs flex-shrink-0">{messages.length}</Badge>
+                </div>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              
+              {/* Swipeable Cards Stack */}
+              <div className="space-y-6 max-w-2xl mx-auto relative px-4">
+                {messages.length === 0 ? (
+                  <Card className="border border-border/30 bg-card/50 backdrop-blur-sm">
+                    <CardContent className="py-20 text-center">
+                      <div className="flex flex-col items-center">
+                        <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-muted/50 to-muted/30 border border-border/30 flex items-center justify-center mb-5">
+                          <Grid3x3 className="h-10 w-10 text-muted-foreground/50" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2 text-foreground">No messages to swipe</h3>
+                        <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+                          All messages in this group have been archived or filtered out.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  messages.map((message, index) => {
+                    const hasReplies = message.replies && message.replies.length > 0;
+                    const isFavorite = favoriteMessages.includes(message.id);
+                    const remainingCount = messages.length - index;
+                    
+                    return (
+                      <div key={message.id} className="relative">
+                        {/* Card Counter */}
+                        {index === 0 && messages.length > 1 && (
+                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 z-20">
+                            <Badge variant="outline" className="bg-background/90 backdrop-blur-sm border-primary/30">
+                              {remainingCount} more
+                            </Badge>
+                          </div>
+                        )}
+                        
+                        <SwipeableMessageCard
+                          key={message.id}
+                          message={message}
+                          isFavorite={isFavorite}
+                          onFavorite={async (messageId) => {
+                            try {
+                              await toggleFavorite(messageId);
+                              // Refresh favorites after toggling
+                              await fetchFavorites();
+                            } catch (error) {
+                              // Error already handled in toggleFavorite
+                            }
+                          }}
+                          onArchive={handleArchive}
+                          timezone={timezone}
+                          hasReplies={hasReplies}
+                          onRate={(msg) => {
+                            setSelectedMessage(msg);
+                            setRating(msg.rating || 0);
+                            setFeedbackText("");
+                          }}
+                          onViewReplies={(msg) => {
+                            // Could open a dialog or expand to show replies
+                            toast.info(`${msg.replies?.length || 0} replies available`);
+                          }}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
+        /* List View */
         <div className="space-y-6">
           {messagesByDate.map(([dateGroup, messages]) => (
             <div key={dateGroup} className="space-y-4">
@@ -423,7 +748,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
               <div className="flex items-center gap-2 sm:gap-3 sticky top-0 z-10 bg-background/80 backdrop-blur-sm py-2 -mt-2">
                 <div className="h-px flex-1 bg-border" />
                 <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 flex-shrink-0">
-                  <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
                   <span className="text-xs sm:text-sm font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{dateGroup}</span>
                   <Badge variant="secondary" className="text-xs flex-shrink-0">{messages.length}</Badge>
                 </div>
@@ -457,7 +782,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                               {message.personality?.value || "Unknown Personality"}
                             </CardTitle>
                             <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm text-muted-foreground">
-                              <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
+                              <Clock className="h-4 w-4 sm:h-4 sm:w-4 flex-shrink-0" />
                               <span className="truncate">{formatDateTimeForTimezone(message.sent_at, timezone)}</span>
                             </div>
                           </div>
@@ -494,7 +819,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                         >
                           <Heart
                             className={cn(
-                              "h-3.5 w-3.5 sm:h-4 sm:w-4 transition-colors",
+                              "h-4 w-4 sm:h-5 sm:w-5 transition-colors",
                               isFavorite ? "fill-foreground text-foreground" : "text-muted-foreground hover:text-foreground"
                             )}
                           />
@@ -506,7 +831,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                   <CardContent className="space-y-3 sm:space-y-4 pt-0">
                     {/* Message Content */}
                     <div className="rounded-lg p-3 sm:p-4 bg-muted/50 border border-border">
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground break-words">
+                      <p className="message-content text-sm leading-relaxed whitespace-pre-wrap text-foreground break-words">
                         {message.message}
                       </p>
                     </div>
@@ -525,7 +850,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                           data-testid="rate-message-btn"
                           className="w-full sm:w-auto h-11 sm:h-9 touch-manipulation"
                         >
-                          <Star className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4", message.rating && "fill-foreground text-foreground")} />
+                          <Star className={cn("h-4 w-4 sm:h-5 sm:w-5", message.rating && "fill-foreground text-foreground")} />
                           {message.rating ? 'Update Rating' : 'Rate This Message'}
                         </Button>
                       </DialogTrigger>
@@ -541,7 +866,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                                 <button
                                   key={star}
                                   onClick={() => setRating(star)}
-                                  className="transition-transform hover:scale-110 active:scale-90 p-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full flex-shrink-0"
+                                  className="transition-transform hover:scale-110 active:scale-100 p-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full flex-shrink-0"
                                   type="button"
                                 >
                                   <Star 
@@ -590,7 +915,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                 {hasReplies && (
                   <div className="ml-0 sm:ml-8 space-y-3 pl-0 sm:pl-4">
                     <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
-                      <Reply className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                      <Reply className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
                       <span className="text-xs sm:text-sm font-medium text-muted-foreground">
                         {message.replies.length === 1 ? 'Your Reply' : 'Your Replies'}
                       </span>
@@ -604,7 +929,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 sm:gap-2">
                               <div className="p-1.5 rounded-lg bg-muted flex-shrink-0">
-                                <Reply className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                                <Reply className="h-4 w-4 sm:h-5 sm:w-5 text-foreground" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <CardTitle className="text-xs sm:text-sm font-semibold">Your Reply</CardTitle>

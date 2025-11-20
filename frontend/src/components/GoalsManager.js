@@ -741,7 +741,7 @@ export function GoalsManager({ user, onUpdate }) {
               <div className="flex-shrink-0 sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 py-3 sm:px-6 sm:py-5 border-b border-border/40 flex items-center justify-between">
                 <DialogHeader className="p-0 space-y-0 text-left w-full">
                   <DialogTitle className="text-base sm:text-2xl font-bold tracking-tight flex items-center gap-1.5 sm:gap-2">
-                    {editingGoal ? <Edit className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-primary" /> : <Plus className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-primary" />}
+                    {editingGoal ? <Edit className="h-4 w-4 sm:h-5 sm:w-5 text-primary" /> : <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />}
                     {editingGoal ? "Edit Goal" : "New Goal"}
                   </DialogTitle>
                 </DialogHeader>
@@ -851,7 +851,7 @@ export function GoalsManager({ user, onUpdate }) {
                               "p-1.5 sm:p-2 rounded-full mb-1.5 sm:mb-2 transition-colors",
                               isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                             )}>
-                              <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+                              <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                             </div>
                             <h3 className="font-semibold text-sm mb-0.5">{option.title}</h3>
                             <p className="text-xs text-muted-foreground">{option.desc}</p>
@@ -987,7 +987,7 @@ export function GoalsManager({ user, onUpdate }) {
                       <p className="text-xs text-muted-foreground mt-0.5">When should we send you emails?</p>
                     </div>
                     <Button type="button" variant="outline" size="sm" onClick={handleAddSchedule} className="w-full sm:w-auto min-w-[140px] h-11 sm:h-9 touch-manipulation">
-                      <Plus className="mr-1 sm:mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <Plus className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" />
                       <span>Add Time</span>
                     </Button>
                   </div>
@@ -1020,7 +1020,7 @@ export function GoalsManager({ user, onUpdate }) {
                                 onClick={() => handleRemoveSchedule(index)}
                                 className="h-11 w-11 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full touch-manipulation"
                               >
-                                <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                <X className="h-4 w-4 sm:h-5 sm:w-5" />
                               </Button>
                             )}
                           </div>
@@ -1193,7 +1193,7 @@ export function GoalsManager({ user, onUpdate }) {
             <CardContent className="p-4 sm:p-5 flex items-center justify-between sm:block">
               <div className="flex items-center gap-2 sm:gap-2.5 sm:mb-4">
                 <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
-                  <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                 </div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Goals</p>
               </div>
@@ -1204,7 +1204,7 @@ export function GoalsManager({ user, onUpdate }) {
             <CardContent className="p-4 sm:p-5 flex items-center justify-between sm:block">
               <div className="flex items-center gap-2 sm:gap-2.5 sm:mb-4">
                 <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/10 border border-green-500/20 group-hover:bg-green-500/15 transition-colors">
-                  <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />
+                  <Play className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                 </div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active</p>
               </div>
@@ -1215,7 +1215,7 @@ export function GoalsManager({ user, onUpdate }) {
             <CardContent className="p-4 sm:p-5 flex items-center justify-between sm:block">
               <div className="flex items-center gap-2 sm:gap-2.5 sm:mb-4">
                 <div className="p-1.5 sm:p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/15 transition-colors">
-                  <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
+                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
                 </div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upcoming</p>
               </div>
@@ -1250,121 +1250,134 @@ export function GoalsManager({ user, onUpdate }) {
               const colors = colorPalette[index % colorPalette.length];
               
               return (
-                <Card key={goal.id} className={`border ${colors.border} bg-gradient-to-br ${colors.bg} ${colors.to} hover:shadow-md hover:${colors.border.replace('/20', '/30')} transition-all duration-300 overflow-hidden relative group ${!isActive ? "opacity-60" : ""}`}>
-                  {/* Subtle background pattern */}
-                  <div className="absolute inset-0 bg-grid-pattern opacity-[0.015]" />
-                  <CardContent className="p-3 sm:p-4 md:p-5 relative">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                      <div className="flex-1 min-w-0 w-full">
-                        {/* Title and Badges - Stack on mobile */}
-                        <div className="flex flex-col gap-2 mb-3">
-                          <div className="flex items-start gap-3">
-                            <div className={`flex-shrink-0 w-8 h-8 rounded-full ${colors.numberBg} border-2 ${colors.numberBorder} flex items-center justify-center mt-0.5`}>
-                              <span className={`${colors.numberText} font-bold text-sm`}>#{goalNumber}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-lg leading-tight break-words mb-1.5">{goal.title || "Untitled Goal"}</h3>
-                              <div className="flex flex-wrap gap-2">
-                                {goal.isMainGoal && (
-                                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] h-5">
-                                    Primary
-                                  </Badge>
-                                )}
-                                <Badge variant={isActive ? "default" : "secondary"} className="gap-1 text-[10px] h-5">
-                                  {isActive ? (
-                                    <>
-                                      <Play className="h-2.5 w-2.5" /> Active
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Pause className="h-2.5 w-2.5" /> Paused
-                                    </>
-                                  )}
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
+                <Card key={goal.id} className={cn(
+                  "border border-border/30 bg-background hover:border-border/50 hover:shadow-md transition-all duration-300 overflow-hidden relative group",
+                  !isActive && "opacity-60"
+                )}>
+                  <CardContent className="p-4 sm:p-5 relative">
+                    {/* Mobile-First Design */}
+                    <div className="flex flex-col gap-4">
+                      {/* Header Section - Number Badge + Title + Status */}
+                      <div className="flex items-start gap-3">
+                        {/* Number Badge */}
+                        <div className={cn(
+                          "flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center",
+                          colors.numberBg,
+                          colors.numberBorder
+                        )}>
+                          <span className={cn(colors.numberText, "font-bold text-sm")}>#{goalNumber}</span>
                         </div>
-                        {/* Description - Always show if available */}
-                        {goal.description && goal.description.trim() && (
-                          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed break-words overflow-wrap-anywhere mb-2 sm:mb-3 whitespace-pre-wrap">{goal.description}</p>
-                        )}
-                        {/* Metadata Row */}
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
-                          <Badge variant="outline" className="gap-1 sm:gap-1.5 text-xs min-w-0 max-w-full">
-                            {goal.mode === "personality" && <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />}
-                            {goal.mode === "tone" && <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />}
-                            {goal.mode === "custom" && <Settings className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />}
-                            <span className="hidden sm:inline">{getModeLabel(goal.mode)}: </span>
-                            <span className="truncate max-w-[120px] sm:max-w-[180px] md:max-w-none inline-block">{getModeValue(goal) || "N/A"}</span>
-                          </Badge>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span className="whitespace-nowrap">{(goal.schedules || []).filter(s => s.active).length} active schedule{(goal.schedules || []).filter(s => s.active).length !== 1 ? 's' : ''}</span>
+                        
+                        {/* Title and Badges */}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-base sm:text-lg leading-tight break-words mb-2">
+                            {goal.title || "Untitled Goal"}
+                          </h3>
+                          
+                          {/* Badges Row */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {goal.isMainGoal && (
+                              <Badge variant="outline" className="bg-muted text-foreground border-border/50 text-xs h-5 px-2 font-normal">
+                                Primary
+                              </Badge>
+                            )}
+                            <Badge 
+                              variant={isActive ? "default" : "secondary"} 
+                              className={cn(
+                                "gap-1.5 text-xs h-5 px-2.5 font-medium shadow-sm",
+                                isActive && "bg-foreground text-background border-0"
+                              )}
+                            >
+                              {isActive ? (
+                                <>
+                                  <Play className="h-3 w-3" /> Active
+                                </>
+                              ) : (
+                                <>
+                                  <Pause className="h-3 w-3" /> Paused
+                                </>
+                              )}
+                            </Badge>
                           </div>
-                          {goal.next_sends && goal.next_sends.length > 0 && (
-                            <div className="flex items-center gap-1 min-w-0 w-full sm:w-auto sm:flex-initial">
-                              <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="truncate text-xs sm:text-sm">Next: {formatDateTimeForTimezone(goal.next_sends[0], goal.schedules?.[0]?.timezone || "UTC", { includeDate: true, includeTime: true })}</span>
-                            </div>
-                          )}
-                          {goal.schedules && goal.schedules.some(s => s.end_date) && (
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-foreground" />
-                              <span className="whitespace-nowrap text-xs sm:text-sm">
-                                Deadline: {formatDateTimeForTimezone(
-                                  goal.schedules.find(s => s.end_date)?.end_date,
-                                  goal.schedules.find(s => s.end_date)?.timezone || "UTC",
-                                  { includeDate: true, includeTime: true }
-                                )}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
-                      {/* Action Buttons - Optimized for touch */}
-                      <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 justify-end w-full sm:w-auto border-t sm:border-t-0 border-border/40 pt-3 sm:pt-0 mt-1 sm:mt-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewHistory(goal)}
-                          className="flex-1 sm:flex-none h-10 sm:h-8 px-3 sm:px-2.5 text-muted-foreground hover:text-foreground"
-                          title="History"
-                        >
-                          <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-0" />
-                          <span className="sm:hidden text-xs font-medium">History</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleActive(goal)}
-                          disabled={loading}
-                          className="flex-1 sm:flex-none h-10 sm:h-8 px-3 sm:px-2.5 text-muted-foreground hover:text-foreground"
-                          title={isActive ? "Pause" : "Activate"}
-                        >
-                          {isActive ? <Pause className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-0" /> : <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-0" />}
-                          <span className="sm:hidden text-xs font-medium">{isActive ? "Pause" : "Start"}</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleOpenModal(goal)}
-                          className="flex-1 sm:flex-none h-10 sm:h-8 px-3 sm:px-2.5 text-muted-foreground hover:text-foreground"
-                          title="Edit"
-                        >
-                          <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-0" />
-                          <span className="sm:hidden text-xs font-medium">Edit</span>
-                        </Button>
+
+                      {/* Description */}
+                      {goal.description && goal.description.trim() && (
+                        <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap line-clamp-2">
+                          {goal.description}
+                        </p>
+                      )}
+
+                      {/* Metadata Section - Personality/Tone Badge */}
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="gap-1.5 text-xs h-6 px-2.5 bg-muted/50 border-border/40">
+                          {goal.mode === "personality" && <Sparkles className="h-3 w-3 flex-shrink-0" />}
+                          {goal.mode === "tone" && <Zap className="h-3 w-3 flex-shrink-0" />}
+                          {goal.mode === "custom" && <Settings className="h-3 w-3 flex-shrink-0" />}
+                          <span className="truncate max-w-[140px] sm:max-w-none">{getModeValue(goal) || "N/A"}</span>
+                        </Badge>
+                      </div>
+
+                      {/* Schedule Info */}
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <span>{(goal.schedules || []).filter(s => s.active).length} active schedule{(goal.schedules || []).filter(s => s.active).length !== 1 ? 's' : ''}</span>
+                      </div>
+
+                      {/* Action Buttons - Mobile Optimized */}
+                      <div className="flex flex-col gap-3 pt-2 border-t border-border/30">
+                        {/* Primary Actions Row */}
+                        <div className="flex items-center justify-between gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewHistory(goal)}
+                            className="flex-1 flex-col h-auto py-2.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          >
+                            <History className="h-4 w-4 mb-1" />
+                            <span className="text-xs font-medium">History</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleToggleActive(goal)}
+                            disabled={loading}
+                            className="flex-1 flex-col h-auto py-2.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          >
+                            {isActive ? (
+                              <>
+                                <Pause className="h-4 w-4 mb-1" />
+                                <span className="text-xs font-medium">Pause</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-4 w-4 mb-1" />
+                                <span className="text-xs font-medium">Start</span>
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenModal(goal)}
+                            className="flex-1 flex-col h-auto py-2.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          >
+                            <Edit className="h-4 w-4 mb-1" />
+                            <span className="text-xs font-medium">Edit</span>
+                          </Button>
+                        </div>
+                        
+                        {/* Delete Action - Centered */}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(goal.id)}
                           disabled={loading}
-                          className="flex-1 sm:flex-none h-10 sm:h-8 px-3 sm:px-2.5 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          title="Delete"
+                          className="w-full flex items-center justify-center gap-2 h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
-                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-0" />
-                          <span className="sm:hidden text-xs font-medium">Delete</span>
+                          <Trash2 className="h-4 w-4" />
+                          <span className="text-xs font-medium">Delete</span>
                         </Button>
                       </div>
                     </div>

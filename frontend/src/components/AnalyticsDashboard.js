@@ -94,7 +94,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
           <div className="mb-8">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-500/15 border border-orange-500/25 group-hover:from-orange-500/25 group-hover:to-amber-500/20 transition-all duration-300 shadow-sm shadow-orange-500/10 flex-shrink-0">
-                <Flame className="h-4.5 w-4.5 text-orange-500" />
+                <Flame className="h-5 w-5 text-orange-500" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-xs font-semibold text-orange-600/80 dark:text-orange-400/80 uppercase tracking-wider mb-1">Current Streak</h3>
@@ -181,7 +181,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
               </div>
               {analytics.avg_rating && (
                 <div className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                  "flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold",
                   analytics.avg_rating >= 4 ? "bg-green-500/10 text-green-600" :
                   analytics.avg_rating >= 3 ? "bg-yellow-500/10 text-yellow-600" :
                   "bg-red-500/10 text-red-600"
@@ -316,7 +316,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
                       </div>
                       <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                         <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/5 border border-primary/10">
-                          <Star className="h-3.5 w-3.5 text-primary fill-primary/30 flex-shrink-0" />
+                          <Star className="h-4 w-4 text-primary fill-primary/30 flex-shrink-0" />
                           <span className="text-sm font-semibold text-foreground tabular-nums">
                             {stats.avg_rating.toFixed(1)}
                           </span>

@@ -98,7 +98,7 @@ export const WeeklyMonthlyReports = React.memo(function WeeklyMonthlyReports({ e
             }}
             className="w-full sm:w-auto shadow-sm"
           >
-            <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+            <Download className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-2" />
             <span className="sm:inline">Export</span>
           </Button>
         </div>
@@ -130,7 +130,7 @@ export const WeeklyMonthlyReports = React.memo(function WeeklyMonthlyReports({ e
 
                   <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/10 hover:border-green-500/20 transition-colors">
                     <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
-                      <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
                       <p className="text-xs sm:text-sm font-medium text-muted-foreground">Avg Rating</p>
                     </div>
                     <p className="text-2xl font-bold text-foreground">
@@ -143,7 +143,7 @@ export const WeeklyMonthlyReports = React.memo(function WeeklyMonthlyReports({ e
 
                   <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/10 hover:border-purple-500/20 transition-colors">
                     <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
-                      <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600 flex-shrink-0" />
+                      <Target className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" />
                       <p className="text-xs sm:text-sm font-medium text-muted-foreground">Current Streak</p>
                     </div>
                     <p className="text-2xl font-bold text-foreground">
@@ -172,7 +172,7 @@ export const WeeklyMonthlyReports = React.memo(function WeeklyMonthlyReports({ e
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 hover:border-blue-500/20 transition-colors">
                     <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
-                      <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 flex-shrink-0" />
+                      <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
                       <p className="text-xs sm:text-sm font-medium text-muted-foreground">Total Messages</p>
                     </div>
                     <p className="text-2xl font-bold text-foreground">{monthlyData.total_messages || 0}</p>
@@ -181,7 +181,7 @@ export const WeeklyMonthlyReports = React.memo(function WeeklyMonthlyReports({ e
 
                   <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/10 hover:border-purple-500/20 transition-colors">
                     <div className="flex items-center gap-1.5 sm:gap-2 mb-2">
-                      <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600 flex-shrink-0" />
+                      <Target className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" />
                       <p className="text-xs sm:text-sm font-medium text-muted-foreground">Current Streak</p>
                     </div>
                     <p className="text-2xl font-bold text-foreground">

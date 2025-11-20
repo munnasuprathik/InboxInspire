@@ -28,6 +28,7 @@ import { AchievementCelebration } from "@/components/AchievementCelebration";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { NetworkStatus } from "@/components/NetworkStatus";
+import { BackendConnectionStatus } from "@/components/BackendConnectionStatus";
 import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { exportMessageHistory, exportAchievements, exportAnalytics } from "@/utils/exportData";
 import { TIMEZONES } from "@/utils/timezones";
@@ -918,36 +919,70 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       const currentIndex = user.current_personality_index || 0;
       const currentPersonality = personalities[currentIndex];
       
+      if (!currentPersonality) {
+        showNotification({ type: 'error', message: "No active personality found", title: "Error" });
+        toast.error("No active personality found");
+        setLoading(false);
+        return;
+      }
+      
+      // Get goals from formData or user.goals
+      const goalsText = formData.goals || user.goals || "Stay motivated and achieve my goals";
+      const userName = formData.name || user.name || "User";
+      
       const response = await axios.post(`${API}/generate-message`, {
-        goals: formData.goals,
+        goals: goalsText,
         personality: {
           type: currentPersonality.type,
           value: currentPersonality.value
         },
-        user_name: formData.name
+        user_name: userName
+      }, {
+        timeout: 30000, // 30 second timeout for AI generation
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
-      setPreviewMessage(response.data.message);
-      if (response.data.used_fallback) {
-        showNotification({ type: 'warning', message: "Preview generated using a backup message while the AI is busy.", title: "Notice" });
-        toast.warning("Preview generated using a backup message while the AI is busy.");
-      } else {
-        showNotification({ type: 'success', message: "Preview Generated!", title: "Success" });
-        toast.success("Preview Generated!", {
-          description: "Here's a sneak peek of your personalized motivation!",
-          duration: 3000,
-        });
-        
-        setTimeout(() => {
-          showNotification({ type: 'success', message: "Ready to Send!", title: "Ready" });
-          toast.success("Ready to Send!", {
-            description: "This is how your email will look. Want to send it now?",
+      
+      if (response.data && response.data.message) {
+        setPreviewMessage(response.data.message);
+        if (response.data.used_fallback) {
+          showNotification({ type: 'warning', message: "Preview generated using a backup message while the AI is busy.", title: "Notice" });
+          toast.warning("Preview generated using a backup message while the AI is busy.");
+        } else {
+          showNotification({ type: 'success', message: "Preview Generated!", title: "Success" });
+          toast.success("Preview Generated!", {
+            description: "Here's a sneak peek of your personalized motivation!",
             duration: 3000,
           });
-        }, 500);
+          
+          setTimeout(() => {
+            showNotification({ type: 'success', message: "Ready to Send!", title: "Ready" });
+            toast.success("Ready to Send!", {
+              description: "This is how your email will look. Want to send it now?",
+              duration: 3000,
+            });
+          }, 500);
+        }
+      } else {
+        throw new Error("Invalid response from server");
       }
     } catch (error) {
-      showNotification({ type: 'error', message: "Failed to generate preview", title: "Error" });
-      toast.error("Failed to generate preview");
+      console.error("Generate preview error:", error);
+      
+      let errorMessage = "Failed to generate preview";
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. The AI is taking longer than expected. Please try again.";
+      } else if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        errorMessage = "Cannot connect to the server. Please check your connection and ensure the backend is running.";
+      } else if (error.response) {
+        errorMessage = error.response?.data?.detail || error.response?.data?.message || `Server error: ${error.response.status}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showNotification({ type: 'error', message: errorMessage, title: "Error" });
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setLoading(false);
     }
@@ -956,7 +991,25 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const handleSendNow = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API}/send-now/${user.email}`);
+      // URL encode email to handle special characters
+      const encodedEmail = encodeURIComponent(user.email);
+      const apiUrl = `${API}/send-now/${encodedEmail}`;
+      
+      console.log('Sending email now to:', encodedEmail);
+      
+      const response = await axios.post(apiUrl, {}, {
+        timeout: 30000, // 30 second timeout
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+      });
+      
+      // Check for error response
+      if (response.status >= 400) {
+        throw new Error(response.data?.detail || `Server returned ${response.status}`);
+      }
+      
       showNotification({ type: 'success', message: "Email Sent!", title: "Success" });
       toast.success("Email Sent!", {
         description: "Check your inbox for your personalized motivation!",
@@ -981,8 +1034,26 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       }, 1200);
       await refreshUserData();
     } catch (error) {
-      showNotification({ type: 'error', message: "Failed to send email", title: "Error" });
-      toast.error("Failed to send email");
+      console.error("Send now error:", error);
+      
+      let errorMessage = "Failed to send email";
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. Please check your connection and try again.";
+      } else if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        errorMessage = "Cannot connect to the server. Please check your connection and ensure the backend is running.";
+      } else if (error.response) {
+        const serverError = error.response?.data?.detail || error.response?.data?.message;
+        if (serverError) {
+          errorMessage = serverError;
+        } else {
+          errorMessage = `Server error: ${error.response.status}`;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showNotification({ type: 'error', message: errorMessage, title: "Error" });
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setLoading(false);
     }
@@ -1130,7 +1201,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     Welcome back, {user?.name?.split(' ')[0] || "User"}
                   </h1>
                   <p className="text-sm text-muted-foreground font-normal flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5 flex-shrink-0" />
+                    <Mail className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">{user?.email || ""}</span>
                   </p>
                 </div>
@@ -1150,7 +1221,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                   <div className="mb-8">
                     <div className="flex items-start gap-3">
                       <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-500/15 border border-orange-500/25 group-hover:from-orange-500/25 group-hover:to-amber-500/20 transition-all duration-300 shadow-sm shadow-orange-500/10 flex-shrink-0">
-                        <Flame className="h-4.5 w-4.5 text-orange-500" />
+                        <Flame className="h-5 w-5 text-orange-500" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-xs font-semibold text-orange-600/80 dark:text-orange-400/80 uppercase tracking-wider mb-1">Current Streak</h3>
@@ -1335,7 +1406,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                   {/* Schedule frequency indicator */}
                   <div className="pt-3 border-t border-border/20">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                         Frequency
                       </span>
                       <span className="text-xs font-semibold text-foreground capitalize">
@@ -1421,7 +1492,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                             <div className="flex-1 h-1 bg-muted/30 rounded-full overflow-hidden">
                               <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '60%' }} />
                             </div>
-                            <span className="text-[10px] text-muted-foreground font-medium">Soon</span>
+                            <span className="text-xs text-muted-foreground font-medium">Soon</span>
                           </div>
                         </div>
                       </CardContent>
@@ -1476,7 +1547,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                         {/* Achievement progress */}
                         <div className="pt-3 border-t border-border/20">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                               Progress
                             </span>
                             <span className="text-xs font-semibold text-foreground">
@@ -1549,7 +1620,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-0 sm:gap-3">
                     <div className="hidden sm:block p-2 rounded-lg bg-primary/10 border border-primary/15 group-hover:bg-primary/15 transition-colors duration-300">
-                      <Mail className="h-4.5 w-4.5 text-primary" />
+                      <Mail className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <CardTitle className="text-base sm:text-lg font-semibold">Preview Your Next Message</CardTitle>
@@ -4668,6 +4739,7 @@ function App() {
           <Toaster position="top-center" />
           {/* <NotificationList /> - Moved to layouts */}
           <NetworkStatus />
+          <BackendConnectionStatus />
           <AdminDashboard />
         </div>
       </ErrorBoundary>

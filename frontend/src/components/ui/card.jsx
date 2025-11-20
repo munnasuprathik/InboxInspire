@@ -5,7 +5,16 @@ import { cn } from "@/lib/utils"
 const Card = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("rounded-xl border border-border/30 bg-card text-card-foreground shadow-sm hover:shadow-md hover:border-border/50 transition-all duration-300", className)}
+    className={cn(
+      "rounded-xl border border-border/30 bg-card/80 backdrop-blur-sm text-card-foreground",
+      "shadow-sm hover:shadow-xl hover:border-border/60",
+      "transition-all duration-300 ease-out",
+      "relative overflow-hidden",
+      "before:absolute before:inset-0 before:bg-gradient-to-br before:from-primary/0 before:via-primary/0 before:to-primary/0",
+      "before:opacity-0 hover:before:opacity-5 before:transition-opacity before:duration-300",
+      "card-hover-lift",
+      className
+    )}
     {...props} />
 ))
 Card.displayName = "Card"

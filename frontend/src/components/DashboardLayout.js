@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { LiquidButton as Button } from "@/components/animate-ui/components/buttons/liquid";
 import { NotificationList } from "@/components/animate-ui/components/community/notification-list";
+import { DynamicGradient } from "@/components/DynamicGradient";
 import { cn } from "@/lib/utils";
 
 /**
@@ -40,13 +41,25 @@ export function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Dynamic Time-Based Gradient Background */}
+      <DynamicGradient />
+      
+      {/* Premium Background Effects */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '6s', animationDelay: '1s' }} />
+      </div>
+      
       {/* Sidebar - Desktop (Minimal, just logo and user) */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-20 lg:flex-col">
-        <div className="flex grow flex-col gap-y-6 overflow-y-auto border-r border-border/40 bg-background/50 backdrop-blur-sm px-3 pb-6">
+        <div className="flex grow flex-col gap-y-6 overflow-y-auto border-r border-border/40 bg-background/60 backdrop-blur-xl shadow-lg px-3 pb-6">
           <div className="flex h-16 shrink-0 items-center justify-center pt-5">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 flex items-center justify-center">
-              <Sparkles className="h-5 w-5 text-primary" />
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 rounded-xl blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="relative h-10 w-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/30 flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-300">
+                <Sparkles className="h-5 w-5 text-primary drop-shadow-sm" />
+              </div>
             </div>
           </div>
           <div className="mt-auto pt-4 border-t border-border/40">
@@ -100,7 +113,7 @@ export function DashboardLayout({
           <div className="flex h-16 shrink-0 items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Sparkles className="h-4.5 w-4.5 text-primary" />
+                <Sparkles className="h-5 w-5 text-primary" />
               </div>
               <span className="text-lg font-semibold text-foreground">Tend</span>
             </div>
@@ -123,7 +136,7 @@ export function DashboardLayout({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <User className="h-4.5 w-4.5 text-muted-foreground" />
+                  <User className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -146,10 +159,10 @@ export function DashboardLayout({
 
       {/* Main content */}
       <div className="lg:pl-20">
-        {/* Top header with navigation - Mobile & Desktop */}
-        <div className="sticky top-0 z-40 border-b border-border/40 bg-background/95 backdrop-blur-md">
-          {/* Mobile header - Instagram Style */}
-          <div className="flex h-14 shrink-0 items-center justify-between px-4 lg:hidden bg-background border-b border-border/20">
+        {/* Top header with navigation - Glassmorphism 2.0 */}
+        <div className="sticky top-0 z-40 border-b border-border/20 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60 shadow-[0_4px_24px_rgba(0,0,0,0.08)] before:absolute before:inset-0 before:bg-gradient-to-b before:from-background/40 before:to-transparent before:pointer-events-none">
+          {/* Mobile header - Premium Style */}
+          <div className="flex h-14 shrink-0 items-center justify-between px-4 lg:hidden bg-background/80 backdrop-blur-sm border-b border-border/20">
             {/* Left: Logo (Instagram style text) */}
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-foreground tracking-tight font-sans">Tend</span>
@@ -173,8 +186,8 @@ export function DashboardLayout({
             </div>
           </div>
 
-          {/* Unified Tab Navigation - Desktop Only */}
-          <div className="hidden lg:block px-10 py-2.5 border-t border-border/30 bg-background/95">
+          {/* Unified Tab Navigation - Desktop Only - Glassmorphism 2.0 */}
+          <div className="hidden lg:block px-10 py-2.5 border-t border-border/20 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60 shadow-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-background/30 before:to-transparent before:pointer-events-none">
             <div className="mx-auto max-w-7xl">
               <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
                 {navigation.map((item) => {
@@ -185,16 +198,24 @@ export function DashboardLayout({
                       key={item.value}
                       onClick={() => onTabChange && onTabChange(item.value)}
                       className={cn(
-                        "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 flex-shrink-0 relative",
+                        "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 flex-shrink-0 relative group",
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          ? "text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                       )}
                     >
-                      <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary-foreground" : "")} />
-                      <span>{item.name}</span>
+                      <Icon className={cn(
+                        "h-4 w-4 shrink-0 transition-all duration-200",
+                        isActive 
+                          ? "text-primary" 
+                          : "group-hover:scale-105"
+                      )} />
+                      <span className={cn(
+                        "transition-all duration-200",
+                        isActive && "font-semibold"
+                      )}>{item.name}</span>
                       {isActive && (
-                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 rounded-full bg-primary-foreground/50" />
+                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-primary rounded-full" />
                       )}
                     </button>
                   );
@@ -214,32 +235,51 @@ export function DashboardLayout({
           </div>
         </main>
 
-        {/* Mobile Bottom Dock Navigation - Instagram Style Refined */}
-        <div className="fixed bottom-0 inset-x-0 z-50 lg:hidden pb-safe-area-inset-bottom bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t border-border/10 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center justify-between h-18 px-4 sm:px-12 max-w-md mx-auto gap-1">
+        {/* Mobile Bottom Dock Navigation - Glassmorphism 2.0 */}
+        <div className="fixed bottom-0 inset-x-0 z-50 lg:hidden pb-safe-area-inset-bottom bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/60 border-t border-border/20 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] before:absolute before:inset-0 before:bg-gradient-to-t before:from-background/40 before:to-transparent before:pointer-events-none">
+          <div className="flex items-center justify-around h-16 px-2 sm:px-6 max-w-md mx-auto">
             {navigation.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.value;
               
-              // Special case for Settings/Profile - mimic Instagram profile tab
+              // Special case for Settings/Profile - Instagram style circle when active
               if (item.value === "settings") {
                  return (
                    <button
                     key={item.value}
                     onClick={() => onTabChange && onTabChange(item.value)}
-                    className="flex items-center justify-center w-12 h-12 sm:w-10 sm:h-10 rounded-full transition-transform active:scale-90 touch-manipulation"
+                    className={cn(
+                      "flex items-center justify-center w-12 h-12 sm:w-11 sm:h-11 rounded-lg transition-all duration-200 active:scale-[0.97] touch-manipulation relative group",
+                      isActive 
+                        ? "" 
+                        : "hover:bg-muted/30"
+                    )}
                   >
-                    <div className={cn(
-                      "h-8 w-8 sm:h-7 sm:w-7 rounded-full overflow-hidden ring-offset-background transition-all duration-200",
-                      isActive ? "ring-2 ring-primary ring-offset-2" : "ring-1 ring-border"
-                    )}>
-                      <div className="h-full w-full bg-muted flex items-center justify-center">
-                         {user?.image_url ? (
-                            <img src={user.image_url} alt="Profile" className="h-full w-full object-cover" />
-                         ) : (
-                            <User className="h-4 w-4 text-muted-foreground" />
-                         )}
+                    <div className="relative flex items-center justify-center">
+                      {/* Instagram style circle when active */}
+                      {isActive && (
+                        <div className="absolute rounded-full border-2 border-primary" style={{ 
+                          width: '32px', 
+                          height: '32px',
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)'
+                        }} />
+                      )}
+                      <div className={cn(
+                        "h-6 w-6 sm:h-[26px] sm:w-[26px] rounded-full overflow-hidden transition-all duration-200 flex items-center justify-center relative z-10",
+                        !isActive && "ring-0.5 ring-border/30 group-hover:ring-border/50"
+                      )}>
+                        {user?.image_url ? (
+                          <img src={user.image_url} alt="Profile" className="h-full w-full object-cover" />
+                        ) : (
+                          <User className="h-6 w-6 sm:h-[26px] sm:w-[26px] text-muted-foreground" />
+                        )}
                       </div>
+                      {/* Small active indicator */}
+                      {isActive && (
+                        <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-0.5 h-0.5 rounded-full bg-primary z-10" />
+                      )}
                     </div>
                   </button>
                  )
@@ -249,22 +289,33 @@ export function DashboardLayout({
                 <button
                   key={item.value}
                   onClick={() => onTabChange && onTabChange(item.value)}
-                  className="flex items-center justify-center w-12 h-12 sm:w-10 sm:h-10 rounded-lg active:scale-90 transition-transform hover:bg-muted/30 touch-manipulation"
+                  className={cn(
+                    "flex items-center justify-center w-12 h-12 sm:w-11 sm:h-11 rounded-lg transition-all duration-200 active:scale-[0.97] touch-manipulation relative group",
+                    isActive 
+                      ? "" 
+                      : "hover:bg-muted/30"
+                  )}
                 >
-                  <div className="relative">
+                  <div className="relative flex items-center justify-center">
                     <Icon 
                       className={cn(
-                        "h-[28px] w-[28px] sm:h-[26px] sm:w-[26px] transition-all duration-300", 
+                        "h-6 w-6 sm:h-[26px] sm:w-[26px] transition-all duration-200", 
                         isActive 
-                          ? "stroke-[2.5px] text-primary scale-105" 
-                          : "stroke-[1.75px] text-muted-foreground hover:text-foreground"
-                      )} 
+                          ? "text-primary" 
+                          : "text-muted-foreground group-hover:text-foreground"
+                      )}
+                      strokeWidth={isActive ? 2.5 : 1.75}
                     />
                     
+                    {/* Small & Neat Active Indicator */}
+                    {isActive && (
+                      <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-0.5 h-0.5 rounded-full bg-primary" />
+                    )}
+                    
                     {/* Notification dot for Overview */}
-                    {item.name === "Overview" && (
-                       <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                         <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 border-2 border-background"></span>
+                    {item.name === "Overview" && !isActive && (
+                       <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                         <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 border border-background"></span>
                        </span>
                     )}
                   </div>
