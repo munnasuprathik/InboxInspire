@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import React from "react";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ const WEEKDAYS = [
   { value: 6, label: "Sunday", short: "Sun" }
 ];
 
-export function GoalsManager({ user, onUpdate }) {
+export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate }, ref) {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -298,6 +298,13 @@ export function GoalsManager({ user, onUpdate }) {
     setActiveTab("basic");
     setShowModal(true);
   };
+
+  // Expose method to parent via ref
+  useImperativeHandle(ref, () => ({
+    openModal: (goal = null) => {
+      handleOpenModal(goal);
+    }
+  }));
 
   const handleCloseModal = () => {
     setShowModal(false);
@@ -717,13 +724,14 @@ export function GoalsManager({ user, onUpdate }) {
   const allGoals = getAllGoals();
 
   return (
-    <Card>
-      <CardHeader className="pb-3 sm:pb-6">
+    <Card className="border-0 sm:border shadow-none sm:shadow-sm">
+      <CardHeader className="pb-3 sm:pb-6 px-4 sm:px-6 pt-4 sm:pt-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2">
           <div className="flex-1">
-            <CardTitle className="flex items-center gap-0 sm:gap-2 text-lg sm:text-xl">
-              <Target className="hidden sm:block h-5 w-5 flex-shrink-0 text-primary" />
-              Goals & Motivational Emails
+            <CardTitle className="flex items-center gap-2 text-base sm:text-xl">
+              <Target className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 text-primary" />
+              <span className="sm:hidden">Goals</span>
+              <span className="hidden sm:inline">Goals & Motivational Emails</span>
             </CardTitle>
             <p className="hidden sm:block text-sm text-muted-foreground mt-1">
               Create multiple goals with custom schedules and personalities
@@ -731,12 +739,12 @@ export function GoalsManager({ user, onUpdate }) {
           </div>
           <Dialog open={showModal} onOpenChange={setShowModal}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={() => handleOpenModal()} className="w-full sm:w-auto">
-                <Plus />
+              <Button size="sm" onClick={() => handleOpenModal()} className="w-full sm:w-auto h-10 sm:h-9 touch-manipulation min-h-[44px] sm:min-h-0">
+                <Plus className="h-4 w-4 flex-shrink-0" />
                 <span className="sm:inline">Create New Goal</span>
               </Button>
             </DialogTrigger>
-            <DialogContent from="top" showCloseButton={true} className="w-full h-[100dvh] sm:h-[85vh] sm:max-w-4xl p-0 bg-background border-border shadow-xl flex flex-col gap-0 sm:rounded-xl overflow-hidden">
+            <DialogContent from="top" showCloseButton={true} className="w-full h-[100dvh] sm:h-[85vh] sm:max-w-4xl p-0 bg-background border-border shadow-xl flex flex-col gap-0 sm:rounded-xl overflow-hidden max-w-full">
               {/* Sticky Header */}
               <div className="flex-shrink-0 sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 py-3 sm:px-6 sm:py-5 border-b border-border/40 flex items-center justify-between">
                 <DialogHeader className="p-0 space-y-0 text-left w-full">
@@ -796,7 +804,7 @@ export function GoalsManager({ user, onUpdate }) {
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                       placeholder="e.g., Finish MVP, Learn Spanish"
-                      className="mt-1 text-base"
+                      className="mt-1 text-base h-11 sm:h-10"
                     />
                     <p className="text-xs text-muted-foreground">Give your goal a clear, motivating name</p>
                   </div>
@@ -806,7 +814,7 @@ export function GoalsManager({ user, onUpdate }) {
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       placeholder="Additional context for personalized messages..."
-                      className="mt-1 text-base"
+                      className="mt-1 text-base min-h-[100px] sm:min-h-[80px]"
                       rows={4}
                       required
                     />
@@ -879,7 +887,7 @@ export function GoalsManager({ user, onUpdate }) {
                             }}
                             className="mt-1"
                           >
-                            <SelectTrigger className="text-base h-11 sm:h-12">
+                            <SelectTrigger className="text-base h-11 sm:h-12 touch-manipulation">
                               <SelectValue placeholder="Choose a personality">
                                 {(() => {
                                   // Display the personality name, not the ID
@@ -942,7 +950,7 @@ export function GoalsManager({ user, onUpdate }) {
                             onValueChange={(value) => setFormData({ ...formData, tone: value })}
                             className="mt-1"
                           >
-                            <SelectTrigger className="text-base h-11 sm:h-12">
+                            <SelectTrigger className="text-base h-11 sm:h-12 touch-manipulation">
                               <SelectValue placeholder="Choose a tone">
                                 {formData.tone || "Choose a tone"}
                               </SelectValue>
@@ -972,7 +980,7 @@ export function GoalsManager({ user, onUpdate }) {
                         value={formData.custom_text}
                         onChange={(e) => setFormData({ ...formData, custom_text: e.target.value })}
                         placeholder="Describe the writing style you want (e.g., 'Write like a friendly mentor, use short sentences, be encouraging but realistic')..."
-                        className="mt-1 text-base min-h-[120px] sm:min-h-[150px]"
+                        className="mt-1 text-base min-h-[120px] sm:min-h-[150px] touch-manipulation"
                         rows={5}
                       />
                       <p className="text-xs text-muted-foreground">Describe how you want your messages to be written</p>
@@ -986,8 +994,8 @@ export function GoalsManager({ user, onUpdate }) {
                       <Label className="text-sm sm:text-lg font-semibold">Delivery Schedule</Label>
                       <p className="text-xs text-muted-foreground mt-0.5">When should we send you emails?</p>
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={handleAddSchedule} className="w-full sm:w-auto min-w-[140px] h-11 sm:h-9 touch-manipulation">
-                      <Plus className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5" />
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddSchedule} className="w-full sm:w-auto min-w-[140px] h-11 sm:h-9 touch-manipulation min-h-[44px] sm:min-h-0">
+                      <Plus className="mr-1 sm:mr-1.5 h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                       <span>Add Time</span>
                     </Button>
                   </div>
@@ -997,19 +1005,19 @@ export function GoalsManager({ user, onUpdate }) {
                       <div key={index} className="p-3 sm:p-5 rounded-xl border border-border/40 bg-accent/10 hover:bg-accent/20 transition-colors space-y-3 sm:space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-0 mb-3 sm:mb-4">
                           <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-background border border-border shadow-sm text-xs sm:text-sm font-semibold text-muted-foreground">
+                            <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-background border border-border shadow-sm text-xs sm:text-sm font-semibold text-muted-foreground flex-shrink-0">
                               {index + 1}
                             </div>
                             <span className="font-medium text-sm sm:text-base">Schedule Config</span>
                           </div>
-                          <div className="flex items-center gap-3 flex-shrink-0 self-end sm:self-auto">
-                            <div className="flex items-center gap-2 bg-background/50 px-3 py-1.5 rounded-full border border-border/30">
-                              <Label className="text-xs font-medium cursor-pointer" htmlFor={`active-${index}`}>Active</Label>
+                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                            <div className="flex items-center gap-2 bg-background/50 px-2.5 sm:px-3 py-1.5 rounded-full border border-border/30">
+                              <Label className="text-xs font-medium cursor-pointer whitespace-nowrap" htmlFor={`active-${index}`}>Active</Label>
                               <Switch
                                 id={`active-${index}`}
                                 checked={schedule.active}
                                 onCheckedChange={(checked) => handleUpdateSchedule(index, "active", checked)}
-                                className="scale-75 origin-right"
+                                className="scale-75 sm:scale-100 origin-right"
                               />
                             </div>
                             {formData.schedules.length > 1 && (
@@ -1018,7 +1026,7 @@ export function GoalsManager({ user, onUpdate }) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleRemoveSchedule(index)}
-                                className="h-11 w-11 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full touch-manipulation"
+                                className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full touch-manipulation min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0"
                               >
                                 <X className="h-4 w-4 sm:h-5 sm:w-5" />
                               </Button>
@@ -1028,42 +1036,42 @@ export function GoalsManager({ user, onUpdate }) {
                         
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
                           <div className="sm:col-span-4">
-                            <Label className="text-xs text-muted-foreground mb-1.5 block">Frequency</Label>
+                            <Label className="text-xs sm:text-sm text-muted-foreground mb-1.5 block">Frequency</Label>
                             <Select
                               value={schedule.type}
                               onValueChange={(value) => handleUpdateSchedule(index, "type", value)}
                             >
-                              <SelectTrigger className="h-10 bg-background">
+                              <SelectTrigger className="h-11 sm:h-10 bg-background text-base sm:text-sm">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="daily">Daily (Every Day)</SelectItem>
-                                <SelectItem value="weekly">Weekly (Specific Days)</SelectItem>
-                                <SelectItem value="monthly">Monthly (Specific Dates)</SelectItem>
+                                <SelectItem value="daily" className="text-base sm:text-sm">Daily (Every Day)</SelectItem>
+                                <SelectItem value="weekly" className="text-base sm:text-sm">Weekly (Specific Days)</SelectItem>
+                                <SelectItem value="monthly" className="text-base sm:text-sm">Monthly (Specific Dates)</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="sm:col-span-3">
-                            <Label className="text-xs text-muted-foreground mb-1.5 block">Time</Label>
+                            <Label className="text-xs sm:text-sm text-muted-foreground mb-1.5 block">Time</Label>
                             <Input
                               type="time"
                               value={schedule.time}
                               onChange={(e) => handleUpdateSchedule(index, "time", e.target.value)}
-                              className="h-10 bg-background"
+                              className="h-11 sm:h-10 bg-background text-base sm:text-sm"
                             />
                           </div>
                           <div className="sm:col-span-5">
-                            <Label className="text-xs text-muted-foreground mb-1.5 block">Timezone</Label>
+                            <Label className="text-xs sm:text-sm text-muted-foreground mb-1.5 block">Timezone</Label>
                             <Select
                               value={schedule.timezone}
                               onValueChange={(value) => handleUpdateSchedule(index, "timezone", value)}
                             >
-                              <SelectTrigger className="h-10 bg-background">
+                              <SelectTrigger className="h-11 sm:h-10 bg-background text-base sm:text-sm">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="max-h-[250px]">
                                 {TIMEZONES.map((tz) => (
-                                  <SelectItem key={tz.value} value={tz.value}>
+                                  <SelectItem key={tz.value} value={tz.value} className="text-base sm:text-sm">
                                     {tz.label}
                                   </SelectItem>
                                 ))}
@@ -1072,7 +1080,7 @@ export function GoalsManager({ user, onUpdate }) {
                           </div>
                           
                           <div className="sm:col-span-12">
-                            <Label className="text-xs text-muted-foreground mb-1.5 block">Stop Sending After (Optional)</Label>
+                            <Label className="text-xs sm:text-sm text-muted-foreground mb-1.5 block">Stop Sending After (Optional)</Label>
                             <Input
                               type="datetime-local"
                               value={schedule.end_date ? (() => {
@@ -1094,7 +1102,7 @@ export function GoalsManager({ user, onUpdate }) {
                                   handleUpdateSchedule(index, "end_date", null);
                                 }
                               }}
-                              className="h-10 bg-background"
+                              className="h-11 sm:h-10 bg-background text-base sm:text-sm"
                               placeholder="Select a date to stop emails"
                             />
                           </div>
@@ -1102,7 +1110,7 @@ export function GoalsManager({ user, onUpdate }) {
 
                         {schedule.type === "weekly" && (
                           <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                            <Label className="text-xs text-muted-foreground mb-2 block">Repeat On</Label>
+                            <Label className="text-xs sm:text-sm text-muted-foreground mb-2 block">Repeat On</Label>
                             <div className="flex flex-wrap gap-2">
                               {WEEKDAYS.map((day) => {
                                 const isSelected = schedule.weekdays?.includes(day.value);
@@ -1118,7 +1126,7 @@ export function GoalsManager({ user, onUpdate }) {
                                       handleUpdateSchedule(index, "weekdays", newWeekdays);
                                     }}
                                     className={cn(
-                                      "h-9 px-3 rounded-md text-sm font-medium transition-all border",
+                                      "h-10 sm:h-9 px-3 sm:px-3 rounded-md text-sm font-medium transition-all border touch-manipulation min-h-[40px] sm:min-h-0",
                                       isSelected
                                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
                                         : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
@@ -1134,7 +1142,7 @@ export function GoalsManager({ user, onUpdate }) {
 
                         {schedule.type === "monthly" && (
                           <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                            <Label className="text-xs text-muted-foreground mb-1.5 block">Days of Month (e.g., 1, 15, 30)</Label>
+                            <Label className="text-xs sm:text-sm text-muted-foreground mb-1.5 block">Days of Month (e.g., 1, 15, 30)</Label>
                             <Input
                               value={schedule.monthly_dates?.join(",") || ""}
                               onChange={(e) => {
@@ -1145,7 +1153,7 @@ export function GoalsManager({ user, onUpdate }) {
                                 handleUpdateSchedule(index, "monthly_dates", dates);
                               }}
                               placeholder="1, 15, 30"
-                              className="h-10 bg-background"
+                              className="h-11 sm:h-10 bg-background text-base sm:text-sm"
                             />
                           </div>
                         )}
@@ -1186,40 +1194,41 @@ export function GoalsManager({ user, onUpdate }) {
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6">
-        {/* Summary Cards - Enhanced Minimalistic Design */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+      <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6 py-4 sm:py-6">
+        {/* Summary Cards - Mobile Redesigned (2 cards), Desktop (3 cards) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <Card className="border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
-            <CardContent className="p-4 sm:p-5 flex items-center justify-between sm:block">
-              <div className="flex items-center gap-2 sm:gap-2.5 sm:mb-4">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
+            <CardContent className="p-4 sm:p-5 flex flex-col items-center justify-center sm:block text-center sm:text-left h-full">
+              <div className="flex flex-col items-center sm:flex-row sm:items-center gap-2 sm:gap-2.5 sm:mb-4 mb-3">
+                <div className="p-2 sm:p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors flex-shrink-0">
                   <Target className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                 </div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Goals</p>
+                <p className="text-xs sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total</p>
               </div>
               <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{counts.totalGoals}</p>
             </CardContent>
           </Card>
           <Card className="border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
-            <CardContent className="p-4 sm:p-5 flex items-center justify-between sm:block">
-              <div className="flex items-center gap-2 sm:gap-2.5 sm:mb-4">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-green-500/10 border border-green-500/20 group-hover:bg-green-500/15 transition-colors">
-                  <Play className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+            <CardContent className="p-4 sm:p-5 flex flex-col items-center justify-center sm:block text-center sm:text-left h-full">
+              <div className="flex flex-col items-center sm:flex-row sm:items-center gap-2 sm:gap-2.5 sm:mb-4 mb-3">
+                <div className="p-2 sm:p-2 rounded-lg bg-green-500/10 border border-green-500/20 group-hover:bg-green-500/15 transition-colors flex-shrink-0">
+                  <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                 </div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active</p>
+                <p className="text-xs sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Active</p>
               </div>
               <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{counts.activeGoals}</p>
             </CardContent>
           </Card>
-          <Card className="border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
-            <CardContent className="p-4 sm:p-5 flex items-center justify-between sm:block">
-              <div className="flex items-center gap-2 sm:gap-2.5 sm:mb-4">
-                <div className="p-1.5 sm:p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/15 transition-colors">
-                  <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
+          {/* Paused Card - Hidden on mobile, visible on desktop */}
+          <Card className="hidden sm:block border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
+            <CardContent className="p-4 sm:p-5 flex flex-col items-center sm:block text-center sm:text-left">
+              <div className="flex flex-col items-center sm:flex-row sm:items-center gap-2 sm:gap-2.5 sm:mb-4 mb-3">
+                <div className="p-2 sm:p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 group-hover:bg-amber-500/15 transition-colors">
+                  <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
                 </div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upcoming</p>
+                <p className="text-xs sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">Paused</p>
               </div>
-              <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{counts.upcomingSends}</p>
+              <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{counts.pausedGoals}</p>
             </CardContent>
           </Card>
         </div>
@@ -1254,28 +1263,28 @@ export function GoalsManager({ user, onUpdate }) {
                   "border border-border/30 bg-background hover:border-border/50 hover:shadow-md transition-all duration-300 overflow-hidden relative group",
                   !isActive && "opacity-60"
                 )}>
-                  <CardContent className="p-4 sm:p-5 relative">
+                  <CardContent className="p-3 sm:p-5 relative">
                     {/* Mobile-First Design */}
                     <div className="flex flex-col gap-4">
                       {/* Header Section - Number Badge + Title + Status */}
-                      <div className="flex items-start gap-3">
-                        {/* Number Badge */}
+                      <div className="flex items-start gap-2.5 sm:gap-3">
+                        {/* Number Badge - Smaller on mobile */}
                         <div className={cn(
-                          "flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center",
+                          "flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full border flex items-center justify-center",
                           colors.numberBg,
                           colors.numberBorder
                         )}>
-                          <span className={cn(colors.numberText, "font-bold text-sm")}>#{goalNumber}</span>
+                          <span className={cn(colors.numberText, "font-bold text-xs sm:text-sm")}>#{goalNumber}</span>
                         </div>
                         
                         {/* Title and Badges */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-base sm:text-lg leading-tight break-words mb-2">
+                          <h3 className="font-semibold text-sm sm:text-lg leading-tight break-words mb-1.5 sm:mb-2 line-clamp-2">
                             {goal.title || "Untitled Goal"}
                           </h3>
                           
-                          {/* Badges Row */}
-                          <div className="flex flex-wrap items-center gap-2">
+                          {/* Badges Row - Mobile Optimized */}
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                             {goal.isMainGoal && (
                               <Badge variant="outline" className="bg-muted text-foreground border-border/50 text-xs h-5 px-2 font-normal">
                                 Primary
@@ -1302,82 +1311,101 @@ export function GoalsManager({ user, onUpdate }) {
                         </div>
                       </div>
 
-                      {/* Description */}
+                      {/* Description - Mobile Optimized */}
                       {goal.description && goal.description.trim() && (
-                        <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap line-clamp-2">
+                        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap line-clamp-2">
                           {goal.description}
                         </p>
                       )}
 
-                      {/* Metadata Section - Personality/Tone Badge */}
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="gap-1.5 text-xs h-6 px-2.5 bg-muted/50 border-border/40">
-                          {goal.mode === "personality" && <Sparkles className="h-3 w-3 flex-shrink-0" />}
-                          {goal.mode === "tone" && <Zap className="h-3 w-3 flex-shrink-0" />}
-                          {goal.mode === "custom" && <Settings className="h-3 w-3 flex-shrink-0" />}
-                          <span className="truncate max-w-[140px] sm:max-w-none">{getModeValue(goal) || "N/A"}</span>
+                      {/* Metadata Section - Personality/Tone Badge - Mobile Compact */}
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <Badge variant="outline" className="gap-1 text-[10px] sm:text-xs h-5 sm:h-6 px-2 sm:px-2.5 bg-muted/50 border-border/40 max-w-full">
+                          {goal.mode === "personality" && <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />}
+                          {goal.mode === "tone" && <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />}
+                          {goal.mode === "custom" && <Settings className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />}
+                          <span className="truncate max-w-[120px] sm:max-w-none">{getModeValue(goal) || "N/A"}</span>
                         </Badge>
                       </div>
 
-                      {/* Schedule Info */}
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                      {/* Schedule Info - Mobile Compact */}
+                      <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                         <span>{(goal.schedules || []).filter(s => s.active).length} active schedule{(goal.schedules || []).filter(s => s.active).length !== 1 ? 's' : ''}</span>
                       </div>
 
                       {/* Action Buttons - Mobile Optimized */}
-                      <div className="flex flex-col gap-3 pt-2 border-t border-border/30">
-                        {/* Primary Actions Row */}
-                        <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2 border-t border-border/30">
+                        {/* Primary Actions Row - Equal width on mobile */}
+                        <div className="flex items-stretch gap-2 sm:gap-3">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleViewHistory(goal)}
-                            className="flex-1 flex-col h-auto py-2.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleViewHistory(goal);
+                            }}
+                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
                           >
-                            <History className="h-4 w-4 mb-1" />
-                            <span className="text-xs font-medium">History</span>
+                            <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 flex-shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-medium">History</span>
                           </Button>
+                          {/* Pause/Play Button - Restored for mobile */}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleToggleActive(goal)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleToggleActive(goal);
+                            }}
                             disabled={loading}
-                            className="flex-1 flex-col h-auto py-2.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
                           >
-                            {isActive ? (
+                            {loading ? (
+                              <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 animate-spin flex-shrink-0" />
+                            ) : isActive ? (
                               <>
-                                <Pause className="h-4 w-4 mb-1" />
-                                <span className="text-xs font-medium">Pause</span>
+                                <Pause className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 flex-shrink-0" />
+                                <span className="text-[10px] sm:text-xs font-medium">Pause</span>
                               </>
                             ) : (
                               <>
-                                <Play className="h-4 w-4 mb-1" />
-                                <span className="text-xs font-medium">Start</span>
+                                <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 flex-shrink-0" />
+                                <span className="text-[10px] sm:text-xs font-medium">Start</span>
                               </>
                             )}
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenModal(goal)}
-                            className="flex-1 flex-col h-auto py-2.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenModal(goal);
+                            }}
+                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
                           >
-                            <Edit className="h-4 w-4 mb-1" />
-                            <span className="text-xs font-medium">Edit</span>
+                            <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 flex-shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-medium">Edit</span>
                           </Button>
                         </div>
                         
-                        {/* Delete Action - Centered */}
+                        {/* Delete Action - Mobile Optimized */}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(goal.id)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDelete(goal.id);
+                          }}
                           disabled={loading}
-                          className="w-full flex items-center justify-center gap-2 h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 h-11 sm:h-9 text-destructive hover:text-destructive hover:bg-destructive/10 text-xs sm:text-sm touch-manipulation relative z-10 min-h-[44px]"
                         >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="text-xs font-medium">Delete</span>
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                          <span className="text-[10px] sm:text-xs font-medium">Delete</span>
                         </Button>
                       </div>
                     </div>
@@ -1391,7 +1419,7 @@ export function GoalsManager({ user, onUpdate }) {
 
       {/* Goal History Dialog */}
       <Dialog open={selectedGoalHistory !== null} onOpenChange={(open) => !open && setSelectedGoalHistory(null)}>
-        <DialogContent from="top" showCloseButton={true} className="w-[95vw] max-w-3xl h-[80vh] p-0 bg-background border-border shadow-xl flex flex-col sm:rounded-xl overflow-hidden">
+        <DialogContent from="top" showCloseButton={true} className="w-[95vw] sm:w-full max-w-3xl h-[90vh] sm:h-[80vh] p-0 bg-background border-border shadow-xl flex flex-col sm:rounded-xl overflow-hidden">
           <div className="flex-shrink-0 sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-4 border-b border-border/40">
             <DialogHeader className="p-0 space-y-1 text-left pr-8">
               <DialogTitle className="text-lg font-bold tracking-tight truncate">
@@ -1421,14 +1449,14 @@ export function GoalsManager({ user, onUpdate }) {
             <div className="space-y-3">
               {goalHistory.map((msg) => (
                 <Card key={msg.id} className={cn("w-full", msg.status === "sent" ? "" : "opacity-80")}>
-                  <CardContent className="p-4">
+                  <CardContent className="p-3 sm:p-4">
                     <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={msg.status === "sent" ? "default" : msg.status === "failed" ? "destructive" : "secondary"}>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant={msg.status === "sent" ? "default" : msg.status === "failed" ? "destructive" : "secondary"} className="text-xs">
                             {msg.status}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground break-words">
                             {formatDateTimeForTimezone(msg.scheduled_for, selectedGoalHistory?.schedules?.[0]?.timezone || "UTC", { includeDate: true, includeTime: true })}
                           </span>
                         </div>
@@ -1436,7 +1464,7 @@ export function GoalsManager({ user, onUpdate }) {
                       
                       <div className="bg-muted/40 p-3 rounded-md border border-border/50 min-h-[60px]">
                         {msg.generated_subject && (
-                          <p className="font-semibold text-sm mb-1">{msg.generated_subject}</p>
+                          <p className="font-semibold text-sm mb-1 break-words">{msg.generated_subject}</p>
                         )}
                         
                         {msg.generated_body ? (
@@ -1481,4 +1509,4 @@ export function GoalsManager({ user, onUpdate }) {
       </Dialog>
     </Card>
   );
-}
+});

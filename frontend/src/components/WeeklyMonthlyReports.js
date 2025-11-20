@@ -105,11 +105,11 @@ export const WeeklyMonthlyReports = React.memo(function WeeklyMonthlyReports({ e
       </CardHeader>
       <CardContent className="p-4 sm:p-6">
         <TabGroup defaultValue="weekly" className="w-full">
-          <TabList className="grid w-full grid-cols-2 gap-2 sm:gap-3 [&>*]:min-h-[44px] sm:[&>*]:min-h-0 [&>*]:touch-manipulation">
-            <Tab value="weekly" className="text-xs sm:text-sm font-medium px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg transition-all duration-200 border border-border/50 data-[selected]:bg-background data-[selected]:border-primary data-[selected]:text-foreground data-[selected]:shadow-sm data-[not-selected]:bg-muted/30 data-[not-selected]:text-muted-foreground hover:bg-muted/50 flex items-center justify-center">
+          <TabList className="flex w-full gap-2">
+            <Tab value="weekly" className="flex-1 text-sm font-medium px-4 py-2.5 rounded-lg transition-all duration-200 border border-border data-[selected]:bg-background data-[selected]:border-foreground data-[selected]:text-foreground data-[selected]:shadow-sm data-[not-selected]:bg-muted/50 data-[not-selected]:text-muted-foreground hover:bg-muted/70 flex items-center justify-center min-h-[44px]">
               Weekly Report
             </Tab>
-            <Tab value="monthly" className="text-xs sm:text-sm font-medium px-3 sm:px-4 py-2.5 sm:py-2 rounded-lg transition-all duration-200 border border-border/50 data-[selected]:bg-background data-[selected]:border-primary data-[selected]:text-foreground data-[selected]:shadow-sm data-[not-selected]:bg-muted/30 data-[not-selected]:text-muted-foreground hover:bg-muted/50 flex items-center justify-center">
+            <Tab value="monthly" className="flex-1 text-sm font-medium px-4 py-2.5 rounded-lg transition-all duration-200 border border-border data-[selected]:bg-background data-[selected]:border-foreground data-[selected]:text-foreground data-[selected]:shadow-sm data-[not-selected]:bg-muted/50 data-[not-selected]:text-muted-foreground hover:bg-muted/70 flex items-center justify-center min-h-[44px]">
               Monthly Report
             </Tab>
           </TabList>

@@ -11,10 +11,10 @@ import {
   LogOut,
   Mail,
   Sparkles,
-  Flame
+  Flame,
+  Home
 } from "lucide-react";
 import { LiquidButton as Button } from "@/components/animate-ui/components/buttons/liquid";
-import { NotificationList } from "@/components/animate-ui/components/community/notification-list";
 import { DynamicGradient } from "@/components/DynamicGradient";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,7 @@ export function DashboardLayout({
   onLogout, 
   activeTab = "overview",
   onTabChange,
+  onAddGoal,
   children 
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -170,18 +171,36 @@ export function DashboardLayout({
             </div>
             
             {/* Right: Actions */}
-            <div className="flex items-center gap-1">
-              {/* Notification Bell */}
-              <NotificationList className="relative top-0 right-0 z-10" />
+            <div className="flex items-center gap-2">
+              {/* Add Goal Button */}
+              {onAddGoal && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onAddGoal}
+                  className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg hover:bg-transparent active:scale-95 transition-all duration-200 touch-manipulation border-0 flex items-center justify-center p-0"
+                  title="Add New Goal"
+                >
+                  <div className="relative w-6 h-6 sm:w-5 sm:h-5 flex items-center justify-center">
+                    {/* Square background - dark muted blue/gray */}
+                    <div className="absolute inset-0 bg-slate-700 dark:bg-slate-600 rounded-md"></div>
+                    {/* White horizontal line - centered */}
+                    <div className="absolute w-3 h-[2px] bg-white rounded-full"></div>
+                    {/* White vertical line - centered */}
+                    <div className="absolute h-3 w-[2px] bg-white rounded-full"></div>
+                  </div>
+                </Button>
+              )}
               
-              {/* Logout Button (Replaces Menu/Slider) */}
+              {/* Logout Button */}
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={onLogout}
-                className="h-11 w-11 sm:h-9 sm:w-9 text-muted-foreground hover:text-destructive transition-colors hover:bg-muted/50 touch-manipulation"
+                className="h-10 w-10 sm:h-9 sm:w-9 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:bg-destructive/20 transition-all duration-200 touch-manipulation border border-transparent hover:border-destructive/20"
+                title="Logout"
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut className="h-5 w-5 stroke-[2.5]" />
               </Button>
             </div>
           </div>
@@ -297,15 +316,28 @@ export function DashboardLayout({
                   )}
                 >
                   <div className="relative flex items-center justify-center">
-                    <Icon 
-                      className={cn(
-                        "h-6 w-6 sm:h-[26px] sm:w-[26px] transition-all duration-200", 
-                        isActive 
-                          ? "text-primary" 
-                          : "text-muted-foreground group-hover:text-foreground"
-                      )}
-                      strokeWidth={isActive ? 2.5 : 1.75}
-                    />
+                    {/* Use Home icon for Overview on mobile, original icon on desktop */}
+                    {item.value === "overview" ? (
+                      <Home 
+                        className={cn(
+                          "h-6 w-6 sm:h-[26px] sm:w-[26px] transition-all duration-200", 
+                          isActive 
+                            ? "text-primary" 
+                            : "text-muted-foreground group-hover:text-foreground"
+                        )}
+                        strokeWidth={isActive ? 2.5 : 1.75}
+                      />
+                    ) : (
+                      <Icon 
+                        className={cn(
+                          "h-6 w-6 sm:h-[26px] sm:w-[26px] transition-all duration-200", 
+                          isActive 
+                            ? "text-primary" 
+                            : "text-muted-foreground group-hover:text-foreground"
+                        )}
+                        strokeWidth={isActive ? 2.5 : 1.75}
+                      />
+                    )}
                     
                     {/* Small & Neat Active Indicator */}
                     {isActive && (

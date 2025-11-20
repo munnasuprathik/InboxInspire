@@ -8,6 +8,7 @@ import { LiquidButton as Button } from "@/components/animate-ui/components/butto
 import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { retryWithBackoff } from "@/utils/retry";
 import { cn } from "@/lib/utils";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from "recharts";
 
 // Use centralized API configuration
 import API_CONFIG from '@/config/api';
@@ -19,6 +20,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [achievements, setAchievements] = useState({ unlocked: [], locked: [] });
+  const [messageHistory, setMessageHistory] = useState([]);
 
   const fetchAnalytics = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -47,6 +49,14 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
       } catch (error) {
         // Silently fail - achievements are optional
       }
+      
+      // Fetch message history for charts
+      try {
+        const historyResponse = await axios.get(`${API}/users/${email}/message-history?limit=100`);
+        setMessageHistory(historyResponse.data.messages || []);
+      } catch (error) {
+        // Silently fail - message history is optional
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to load analytics");
     } finally {
@@ -68,6 +78,171 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
     return () => clearInterval(interval);
   }, [fetchAnalytics]);
 
+  // Prepare chart data with enhanced analytics
+  const chartData = useMemo(() => {
+    if (!messageHistory || messageHistory.length === 0) return { 
+      activityData: [], 
+      ratingData: [], 
+      personalityData: [],
+      weeklyTrend: [],
+      engagementTrend: []
+    };
+
+    // 1. Message Activity Over Time (Last 30 days) - Enhanced with trends
+    const activityMap = new Map();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    messageHistory.forEach((msg) => {
+      if (msg.sent_at) {
+        const date = new Date(msg.sent_at);
+        if (date >= thirtyDaysAgo) {
+          const dateKey = date.toISOString().split('T')[0];
+          activityMap.set(dateKey, (activityMap.get(dateKey) || 0) + 1);
+        }
+      }
+    });
+
+    const activityData = [];
+    let previousCount = 0;
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateKey = date.toISOString().split('T')[0];
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+      const messages = activityMap.get(dateKey) || 0;
+      const trend = messages > previousCount ? 'up' : messages < previousCount ? 'down' : 'same';
+      activityData.push({
+        date: dayName,
+        fullDate: dateKey,
+        messages,
+        trend
+      });
+      previousCount = messages;
+    }
+
+    // Calculate average for reference line
+    const avgMessages = activityData.reduce((sum, d) => sum + d.messages, 0) / activityData.length;
+
+    // 2. Rating Distribution - Enhanced with percentages
+    const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalRatings = 0;
+    messageHistory.forEach((msg) => {
+      if (msg.rating && msg.rating >= 1 && msg.rating <= 5) {
+        ratingCounts[msg.rating]++;
+        totalRatings++;
+      }
+    });
+
+    const ratingData = Object.entries(ratingCounts).map(([rating, count]) => ({
+      rating: `${rating}★`,
+      count,
+      percentage: totalRatings > 0 ? ((count / totalRatings) * 100).toFixed(1) : 0
+    }));
+
+    // 3. Personality Performance - Enhanced with message count
+    const personalityMap = new Map();
+    messageHistory.forEach((msg) => {
+      if (msg.personality) {
+        const personalityName = msg.personality.value || msg.personality;
+        if (!personalityMap.has(personalityName)) {
+          personalityMap.set(personalityName, { total: 0, sum: 0, count: 0, ratings: [] });
+        }
+        const stats = personalityMap.get(personalityName);
+        stats.total++;
+        if (msg.rating) {
+          stats.sum += msg.rating;
+          stats.count++;
+          stats.ratings.push(msg.rating);
+        }
+      }
+    });
+
+    const personalityData = Array.from(personalityMap.entries())
+      .map(([name, stats]) => ({
+        name: name.length > 20 ? name.substring(0, 20) + '...' : name,
+        fullName: name,
+        rating: stats.count > 0 ? parseFloat((stats.sum / stats.count).toFixed(1)) : 0,
+        messages: stats.total,
+        ratingCount: stats.count
+      }))
+      .sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating))
+      .slice(0, 6); // Top 6
+
+    // 4. Weekly Trend (Last 4 weeks)
+    const weeklyMap = new Map();
+    messageHistory.forEach((msg) => {
+      if (msg.sent_at) {
+        const date = new Date(msg.sent_at);
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
+        const weekKey = weekStart.toISOString().split('T')[0];
+        weeklyMap.set(weekKey, (weeklyMap.get(weekKey) || 0) + 1);
+      }
+    });
+
+    const weeklyTrend = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - (weekStart.getDay() + (i * 7)));
+      const weekKey = weekStart.toISOString().split('T')[0];
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weeklyTrend.push({
+        week: `Week ${4 - i}`,
+        start: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        messages: weeklyMap.get(weekKey) || 0
+      });
+    }
+
+    // 5. Engagement Trend (Messages with ratings over time)
+    const engagementMap = new Map();
+    messageHistory.forEach((msg) => {
+      if (msg.sent_at && msg.rating) {
+        const date = new Date(msg.sent_at);
+        if (date >= thirtyDaysAgo) {
+          const dateKey = date.toISOString().split('T')[0];
+          if (!engagementMap.has(dateKey)) {
+            engagementMap.set(dateKey, { rated: 0, total: 0 });
+          }
+          const stats = engagementMap.get(dateKey);
+          stats.rated++;
+          stats.total++;
+        }
+      } else if (msg.sent_at) {
+        const date = new Date(msg.sent_at);
+        if (date >= thirtyDaysAgo) {
+          const dateKey = date.toISOString().split('T')[0];
+          if (!engagementMap.has(dateKey)) {
+            engagementMap.set(dateKey, { rated: 0, total: 0 });
+          }
+          engagementMap.get(dateKey).total++;
+        }
+      }
+    });
+
+    const engagementTrend = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateKey = date.toISOString().split('T')[0];
+      const stats = engagementMap.get(dateKey) || { rated: 0, total: 0 };
+      engagementTrend.push({
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        engagement: stats.total > 0 ? ((stats.rated / stats.total) * 100).toFixed(0) : 0
+      });
+    }
+
+    return { 
+      activityData, 
+      ratingData, 
+      personalityData,
+      weeklyTrend,
+      engagementTrend,
+      avgMessages
+    };
+  }, [messageHistory]);
+
 
   // Early returns AFTER all hooks
   if (loading) {
@@ -80,70 +255,46 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Hero Streak Card - Enhanced with Color */}
+      {/* Analytics Streak Card - Minimal Design */}
       <Card 
         data-testid="streak-card" 
-        className="border border-orange-500/20 bg-gradient-to-br from-orange-500/5 via-amber-500/3 to-transparent shadow-sm hover:shadow-md hover:border-orange-500/30 transition-all duration-300 overflow-hidden relative group"
+        className="border border-border"
       >
-        {/* Subtle background elements */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-[0.02]" />
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/8 via-amber-500/4 to-transparent opacity-50 group-hover:opacity-70 transition-opacity duration-300" />
-        
-        <CardContent className="p-6 sm:p-8 relative">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-500/15 border border-orange-500/25 group-hover:from-orange-500/25 group-hover:to-amber-500/20 transition-all duration-300 shadow-sm shadow-orange-500/10 flex-shrink-0">
-                <Flame className="h-5 w-5 text-orange-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-xs font-semibold text-orange-600/80 dark:text-orange-400/80 uppercase tracking-wider mb-1">Current Streak</h3>
-                <p className="text-xs text-muted-foreground font-normal leading-relaxed">Consecutive days of motivation</p>
-              </div>
-            </div>
-          </div>
-          
-          {/* Streak Number Display */}
-          <div className="flex items-end gap-3 mb-8">
-            <div className="relative">
-              <p className="text-6xl sm:text-7xl font-bold tracking-tighter leading-none bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 bg-clip-text text-transparent">
-                {analytics.streak_count}
-              </p>
-              {/* Pulse indicator - positioned at top-right */}
-              <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-orange-500 animate-pulse shadow-lg shadow-orange-500/50 z-10" />
-              <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-orange-500/30 animate-ping z-10" />
-            </div>
-            <p className="text-base font-medium text-orange-600/70 dark:text-orange-400/70 mb-0">days</p>
-          </div>
-          
-          {/* Milestone Progress */}
-          <div className="pt-5 border-t border-orange-500/15">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-orange-600/70 dark:text-orange-400/70 font-medium">Next milestone</span>
-              <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">
-                {analytics.streak_count < 7 ? 7 : analytics.streak_count < 30 ? 30 : analytics.streak_count < 100 ? 100 : '∞'} days
-              </span>
-            </div>
-            <div className="w-full h-2 bg-orange-500/10 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-orange-500 via-orange-400 to-amber-500 rounded-full transition-all duration-700 ease-out shadow-sm shadow-orange-500/30"
-                style={{ 
-                  width: `${Math.min(100, analytics.streak_count < 7 
-                    ? (analytics.streak_count / 7) * 100 
-                    : analytics.streak_count < 30 
-                    ? ((analytics.streak_count - 7) / 23) * 100 
-                    : analytics.streak_count < 100
-                    ? ((analytics.streak_count - 30) / 70) * 100
-                    : 100)}%` 
-                }}
-              />
-            </div>
+        <CardContent className="p-6">
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">Current Streak</p>
+            <p className="text-4xl font-semibold text-foreground mb-4">
+              {analytics.streak_count}
+              <span className="text-lg text-muted-foreground ml-2">days</span>
+            </p>
+            {/* Minimalistic Progress Line */}
+            {(() => {
+              const streak = analytics.streak_count || 0;
+              let nextMilestone = 7;
+              if (streak >= 7 && streak < 30) nextMilestone = 30;
+              else if (streak >= 30 && streak < 100) nextMilestone = 100;
+              else if (streak >= 100 && streak < 365) nextMilestone = 365;
+              else if (streak >= 365) nextMilestone = streak + 100;
+              
+              const progress = streak >= nextMilestone ? 100 : (streak / nextMilestone) * 100;
+              
+              return (
+                <div className="mt-4">
+                  <div className="w-full h-0.5 bg-muted/30 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-foreground rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.min(100, progress)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </CardContent>
       </Card>
 
       {/* Key Metrics - Enhanced with Visual Indicators */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card className="border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -271,13 +422,325 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
         </Card>
       )}
 
+      {/* Charts Section - Enhanced Dynamic Graphs */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Chart 1: Message Activity Over Time - Enhanced */}
+        <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
+          <CardHeader className="pb-3 px-4 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-foreground">Daily Activity Trend</CardTitle>
+              {chartData.activityData.length > 0 && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Avg: {chartData.avgMessages?.toFixed(1) || 0}/day</span>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 sm:px-6">
+            {chartData.activityData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220} className="sm:h-[240px]">
+                <AreaChart data={chartData.activityData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                      <stop offset="50%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorAvg" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.3}/>
+                      <stop offset="100%" stopColor="#94a3b8" stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    interval="preserveStartEnd"
+                    axisLine={false}
+                    tickLine={false}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                    className="sm:angle-0 sm:textAnchor-middle sm:height-auto"
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={35}
+                    className="sm:w-auto"
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value, name) => [value, 'Messages']}
+                    labelFormatter={(label) => `Date: ${label}`}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="messages" 
+                    stroke="#3b82f6" 
+                    strokeWidth={2.5}
+                    fillOpacity={1}
+                    fill="url(#colorMessages)"
+                    dot={{ fill: '#3b82f6', r: 3, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 5, stroke: '#3b82f6', strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] sm:h-[240px] flex items-center justify-center text-muted-foreground text-sm">
+                No activity data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Chart 2: Rating Distribution - Enhanced */}
+        <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
+          <CardHeader className="pb-3 px-4 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-foreground">Rating Distribution</CardTitle>
+              {chartData.ratingData.some(d => d.count > 0) && (
+                <div className="text-xs text-muted-foreground">
+                  {chartData.ratingData.reduce((sum, d) => sum + d.count, 0)} total ratings
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 sm:px-6">
+            {chartData.ratingData.some(d => d.count > 0) ? (
+              <ResponsiveContainer width="100%" height={220} className="sm:h-[240px]">
+                <BarChart data={chartData.ratingData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
+                  <XAxis 
+                    dataKey="rating" 
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={35}
+                    className="sm:w-auto"
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value, name, props) => [
+                      `${value} (${props.payload.percentage}%)`,
+                      'Count'
+                    ]}
+                  />
+                  <Bar 
+                    dataKey="count" 
+                    radius={[6, 6, 0, 0]}
+                  >
+                    {chartData.ratingData.map((entry, index) => {
+                      const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981'];
+                      return <Cell key={`cell-${index}`} fill={colors[index]} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] sm:h-[240px] flex items-center justify-center text-muted-foreground text-sm">
+                No ratings available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Chart 3: Weekly Trend & Engagement */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Weekly Message Trend */}
+        {chartData.weeklyTrend.length > 0 && (
+          <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-3 px-4 sm:px-6">
+              <CardTitle className="text-sm font-semibold text-foreground">Weekly Message Trend</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6">
+              <ResponsiveContainer width="100%" height={200} className="sm:h-[220px]">
+                <BarChart data={chartData.weeklyTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
+                  <XAxis 
+                    dataKey="week" 
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value, name, props) => [
+                      `${value} messages`,
+                      props.payload.start
+                    ]}
+                  />
+                  <Bar 
+                    dataKey="messages" 
+                    fill="#8b5cf6"
+                    radius={[6, 6, 0, 0]}
+                  >
+                    {chartData.weeklyTrend.map((entry, index) => {
+                      const colors = ['#8b5cf6', '#a855f7', '#c084fc', '#d8b4fe'];
+                      return <Cell key={`cell-${index}`} fill={colors[index] || '#8b5cf6'} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Engagement Trend */}
+        {chartData.engagementTrend.length > 0 && (
+          <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-3 px-4 sm:px-6">
+              <CardTitle className="text-sm font-semibold text-foreground">Engagement Rate Trend</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6">
+              <ResponsiveContainer width="100%" height={200} className="sm:h-[220px]">
+                <LineChart data={chartData.engagementTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                    interval="preserveStartEnd"
+                    axisLine={false}
+                    tickLine={false}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                    className="sm:angle-0 sm:textAnchor-middle sm:height-auto"
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={false}
+                    tickLine={false}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value) => [`${value}%`, 'Engagement']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="engagement" 
+                    stroke="#22c55e" 
+                    strokeWidth={2.5}
+                    dot={{ fill: '#22c55e', r: 3, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 5, stroke: '#22c55e', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Chart 4: Personality Performance Comparison - Enhanced */}
+      {chartData.personalityData.length > 0 && (
+        <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
+          <CardHeader className="pb-3 px-4 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-foreground">Top Personalities Performance</CardTitle>
+              <div className="text-xs text-muted-foreground">
+                Ranked by average rating
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 sm:px-6">
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[280px]">
+              <BarChart data={chartData.personalityData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
+                <XAxis 
+                  type="number"
+                  domain={[0, 5]}
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                  <YAxis 
+                  type="category" 
+                  dataKey="name" 
+                  tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                  width={80}
+                  axisLine={false}
+                  tickLine={false}
+                  className="sm:w-[120px]"
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value, name, props) => [
+                    `${value}★ (${props.payload.messages} messages, ${props.payload.ratingCount} ratings)`,
+                    'Avg Rating'
+                  ]}
+                  labelFormatter={(label) => `Personality: ${label}`}
+                />
+                <Bar 
+                  dataKey="rating" 
+                  radius={[0, 8, 8, 0]}
+                >
+                  {chartData.personalityData.map((entry, index) => {
+                    const colors = ['#8b5cf6', '#a855f7', '#c084fc', '#d8b4fe', '#e9d5ff', '#f3e8ff'];
+                    return <Cell key={`cell-${index}`} fill={colors[index] || '#8b5cf6'} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+
       {/* Personality Breakdown - Enhanced with Visual Bars */}
       {Object.keys(analytics.personality_stats).length > 0 && (
         <Card className="border border-border/50 hover:border-border hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 px-4 sm:px-6">
             <CardTitle className="text-sm font-semibold text-foreground">Performance by Personality</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <div className="space-y-2.5">
               {Object.entries(analytics.personality_stats)
                 .sort(([, a], [, b]) => b.avg_rating - a.avg_rating)

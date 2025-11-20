@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import "@/App.css";
 import axios from "axios";
 import { LiquidButton as Button } from "@/components/animate-ui/components/buttons/liquid";
@@ -21,7 +21,6 @@ import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
 import { GoalsManager } from "@/components/GoalsManager";
 import { StreakCalendar } from "@/components/StreakCalendar";
 import { StreakMilestones } from "@/components/StreakMilestones";
-import { WeeklyMonthlyReports } from "@/components/WeeklyMonthlyReports";
 import { RealTimeAnalytics } from "@/components/RealTimeAnalytics";
 import { AdminUserDetails } from "@/components/AdminUserDetails";
 import { AchievementCelebration } from "@/components/AchievementCelebration";
@@ -792,6 +791,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const [goals, setGoals] = useState([]);
   const [goalsLoading, setGoalsLoading] = useState(false);
   const [goalsRefreshKey, setGoalsRefreshKey] = useState(0);
+  const goalsManagerRef = useRef(null);
 
   const userTimezone = user.schedule?.timezone;
   const userScheduleTimeLabel = formatScheduleTime(
@@ -930,7 +930,17 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       const goalsText = formData.goals || user.goals || "Stay motivated and achieve my goals";
       const userName = formData.name || user.name || "User";
       
+      // Log API endpoint for debugging
+      console.log('Generating preview with API:', `${API}/generate-message`);
+      console.log('Request payload:', {
+        email: user.email,
+        goals: goalsText.substring(0, 50) + '...',
+        personality: currentPersonality,
+        user_name: userName
+      });
+      
       const response = await axios.post(`${API}/generate-message`, {
+        email: user.email,
         goals: goalsText,
         personality: {
           type: currentPersonality.type,
@@ -996,6 +1006,8 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       const apiUrl = `${API}/send-now/${encodedEmail}`;
       
       console.log('Sending email now to:', encodedEmail);
+      console.log('API URL:', apiUrl);
+      console.log('Full API base:', API);
       
       const response = await axios.post(apiUrl, {}, {
         timeout: 30000, // 30 second timeout
@@ -1189,6 +1201,23 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
         onLogout={onLogout}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        onAddGoal={() => {
+          // Switch to overview tab if not already there
+          if (activeTab !== "overview") {
+            setActiveTab("overview");
+            // Wait for tab switch, then open modal
+            setTimeout(() => {
+              if (goalsManagerRef.current) {
+                goalsManagerRef.current.openModal();
+              }
+            }, 100);
+          } else {
+            // Already on overview, open modal immediately
+            if (goalsManagerRef.current) {
+              goalsManagerRef.current.openModal();
+            }
+          }
+        }}
       >
         <TabGroup value={activeTab} onChange={setActiveTab} className="space-y-6">
           <TabPanels>
@@ -1581,23 +1610,31 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               )}
             </div>
 
-            {/* Section Header */}
-            <div className="flex items-center gap-3 pt-2">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent" />
-              <div className="flex items-center gap-2 px-4">
+            {/* Section Header - Mobile Optimized */}
+            <div className="flex items-center gap-2 sm:gap-3 pt-2 sm:pt-4">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent hidden sm:block" />
+              <div className="flex items-center gap-2 px-2 sm:px-4">
                 <Target className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Goals & Schedule</h2>
               </div>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent" />
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent hidden sm:block" />
             </div>
 
-            {/* Goals Manager - Enhanced Container */}
+            {/* Goals Manager - Mobile Redesigned Container */}
             <div className="relative">
-              {/* Subtle background gradient */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/2 via-transparent to-blue-500/2 rounded-2xl -z-10 opacity-50" />
-              <div className="relative bg-card/40 backdrop-blur-sm border border-border/30 rounded-2xl p-6 sm:p-8 hover:border-border/50 transition-all duration-300">
-                {/* Goals Manager Component */}
-                <GoalsManager user={user} onUpdate={handleUserStateUpdate} />
+              {/* Desktop: Enhanced Container with gradient */}
+              <div className="hidden sm:block relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/2 via-transparent to-blue-500/2 rounded-2xl -z-10 opacity-50" />
+                <div className="relative bg-card/40 backdrop-blur-sm border border-border/30 rounded-2xl p-6 sm:p-8 hover:border-border/50 transition-all duration-300">
+                  <GoalsManager ref={goalsManagerRef} user={user} onUpdate={handleUserStateUpdate} />
+                </div>
+              </div>
+              
+              {/* Mobile: Clean Minimalistic Design */}
+              <div className="sm:hidden">
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <GoalsManager ref={goalsManagerRef} user={user} onUpdate={handleUserStateUpdate} />
+                </div>
               </div>
             </div>
 
@@ -1720,12 +1757,6 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               onNewAchievements={handleNewAchievements}
             />
             
-            {/* Streak Milestones - Second */}
-            <StreakMilestones 
-              streakCount={user.streak_count || 0}
-              lastEmailSent={user.last_email_sent}
-            />
-            
             {/* Streak Calendar */}
             <StreakCalendar 
               streakCount={user.streak_count || 0}
@@ -1734,9 +1765,6 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               messageHistory={messageHistory}
               timezone={userTimezone}
             />
-            
-            {/* Weekly/Monthly Reports */}
-            <WeeklyMonthlyReports email={user.email} user={user} refreshKey={refreshKey} />
             </TabPanel>
 
             <TabPanel value="achievements" className="space-y-4 sm:space-y-6">

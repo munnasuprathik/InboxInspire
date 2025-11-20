@@ -106,9 +106,12 @@ class EmailReplyAnalysis(BaseModel):
     needs_immediate_response: bool
 
 class MessageGenRequest(BaseModel):
+    email: Optional[str] = None  # User email for logging/tracking
     goals: str = Field(..., min_length=1, max_length=5000)  # Validation
     personality: PersonalityType
     user_name: Optional[str] = Field(None, max_length=200)  # Limit length
+    message_type: Optional[str] = None  # Type of message (optional)
+    goal_id: Optional[str] = None  # Goal ID if this is for a specific goal
 
 class MessageGenResponse(BaseModel):
     message: str

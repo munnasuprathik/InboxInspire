@@ -141,28 +141,32 @@ export const StreakCalendar = React.memo(function StreakCalendar({
         </div>
 
         {/* Month Navigation */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3">
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={goToPreviousMonth}
-            className="p-2 rounded-full hover:bg-muted/50 transition-colors"
+            className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors flex-shrink-0"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-5 w-5 text-muted-foreground hover:text-foreground" />
           </button>
-          <span className="text-sm sm:text-base font-semibold text-foreground min-w-[140px] sm:min-w-[160px] text-center">
+          <span className="text-sm sm:text-base font-semibold text-foreground min-w-[140px] sm:min-w-[160px] text-center flex-shrink-0">
             {getMonthYear()}
           </span>
           <button
             onClick={goToNextMonth}
             disabled={isCurrentMonth()}
-            className={`p-2 rounded-full transition-colors ${
+            className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors flex-shrink-0 ${
               isCurrentMonth() 
-                ? 'text-muted-foreground/30 cursor-not-allowed' 
-                : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                ? 'cursor-not-allowed opacity-30' 
+                : 'hover:bg-muted/50'
             }`}
             aria-label="Next month"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className={`h-5 w-5 ${
+              isCurrentMonth() 
+                ? 'text-muted-foreground/30' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`} />
           </button>
         </div>
 

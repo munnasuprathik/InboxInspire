@@ -2278,7 +2278,8 @@ async def update_user(email: str, updates: UserProfileUpdate):
 @limiter.limit("10/minute")  # Limit OpenAI API calls
 async def generate_message(message_request: MessageGenRequest, request: FastAPIRequest):
     start_time = time.time()
-    logger.info(f"💬 Message generation request for: {message_request.email}")
+    email = message_request.email or "unknown"
+    logger.info(f"💬 Message generation request for: {email}")
     logger.debug(f"Message type: {message_request.message_type}, Goal: {message_request.goal_id}")
     
     message, _, used_fallback, _ = await generate_unique_motivational_message(
@@ -2290,7 +2291,7 @@ async def generate_message(message_request: MessageGenRequest, request: FastAPIR
     )
     
     gen_duration = time.time() - start_time
-    logger.info(f"✅ Message generated for {message_request.email} in {gen_duration:.2f}s (fallback: {used_fallback})")
+    logger.info(f"✅ Message generated for {email} in {gen_duration:.2f}s (fallback: {used_fallback})")
     logger.debug(f"Message length: {len(message)} characters")
     
     return MessageGenResponse(message=message, used_fallback=used_fallback)
