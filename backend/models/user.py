@@ -43,6 +43,7 @@ class UserProfile(BaseModel):
     active: bool = True
     last_email_sent: Optional[datetime] = None
     streak_count: int = 0
+    days_since_start: int = 0  # Days since user started (continues regardless of pauses)
     total_messages_received: int = 0
     last_active: Optional[datetime] = None
     achievements: List[str] = []  # List of achievement IDs unlocked

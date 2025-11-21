@@ -198,7 +198,7 @@ export const StreakMilestones = React.memo(function StreakMilestones({ streakCou
                         {getMilestoneIcon(days)}
                       </div>
                       <div>
-                        <p className="font-medium text-muted-foreground group-hover:text-foreground transition-colors">{days} Day Milestone</p>
+                        <p className="font-medium text-muted-foreground group-hover:text-foreground/70 transition-colors">{days} Day Milestone</p>
                         <p className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
                           {getMilestoneLabel(days)} {daysToGo} days to go
                         </p>

@@ -314,62 +314,6 @@ def generate_interactive_defaults(streak_count: int, goals: str) -> tuple[List[s
     return [check_line], [reply_line]
 
 
-def render_email_html(
-    streak_count: int,
-    streak_icon: str,
-    streak_message: str,
-    core_message: str,
-    check_in_lines: List[str],
-    quick_reply_lines: List[str],
-) -> str:
-    """Return a clean and concise HTML email body."""
-    safe_core = html.escape(core_message).replace("\n", "<br />")
-    check_in_block = _render_list_items(check_in_lines)
-    quick_reply_block = _render_list_items(quick_reply_lines)
-
-    return f"""
-    <html>
-    <head>
-        <style>
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 0; color: #1f2933; }}
-            .wrapper {{ max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; padding: 28px 32px; box-shadow: 0 12px 30px rgba(40,52,71,0.08); }}
-            .streak {{ font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: #516070; margin-bottom: 20px; }}
-            .streak strong {{ color: #1b3a61; }}
-            .message {{ font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; }}
-            .panel {{ border-top: 1px solid #e4e8f0; padding-top: 20px; margin-top: 12px; }}
-            .panel-title {{ font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #394966; margin: 0 0 10px 0; }}
-            .panel ul {{ margin: 0; padding-left: 18px; color: #1f2933; font-size: 15px; line-height: 1.5; }}
-            .panel ul li {{ margin-bottom: 8px; }}
-            .signature {{ margin-top: 28px; font-size: 13px; color: #5a687d; }}
-            .footer {{ margin-top: 28px; font-size: 11px; color: #8b97aa; text-align: center; }}
-            @media (max-width: 520px) {{ .wrapper {{ padding: 24px; }} }}
-        </style>
-    </head>
-    <body>
-        <div class="wrapper">
-            <p class="streak"><strong>{html.escape(streak_icon)}</strong> {html.escape(streak_message)} · {streak_count} day{'s' if streak_count != 1 else ''}</p>
-            <div class="message">{safe_core}</div>
-            <div class="panel">
-                <p class="panel-title">Interactive Check-In</p>
-                {check_in_block or "<p style='margin:0;color:#3d4a5c;'>Share what today looks like.</p>"}
-            </div>
-            <div class="panel">
-                <p class="panel-title">Quick Reply Prompt</p>
-                {quick_reply_block or "<p style='margin:0;color:#3d4a5c;'>Reply with the first action you'll take next.</p>"}
-            </div>
-            <div class="signature">
-                <span>With you in this,</span>
-                <span>Tend Coach</span>
-            </div>
-            <div class="footer">
-                You are receiving this email because you subscribed to Tend updates.
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
-
 def fallback_subject_line(streak: int, goals: str) -> str:
     """Deterministic fallback subject when the LLM is unavailable."""
     options = [
@@ -652,11 +596,15 @@ async def send_email(
         msg['Message-ID'] = message_id
         
         # Add List-Unsubscribe header for compliance
-        frontend_url = os.getenv('FRONTEND_URL')
+        frontend_url = os.getenv('FRONTEND_URL', '')
+        sender_email = os.getenv('SENDER_EMAIL', '')
+        email_domain = sender_email.split('@')[1] if '@' in sender_email else 'tend.app'
         if not frontend_url:
-            logger.warning("⚠️ FRONTEND_URL not set - unsubscribe links may not work")
-            frontend_url = ''  # Will be empty if not set
-        unsubscribe_url = f"{frontend_url}/unsubscribe?email={to_email}" if frontend_url else f"mailto:unsubscribe@{email_domain}?subject=Unsubscribe&body=Email:{to_email}"
+            logger.warning("⚠️ FRONTEND_URL not set - using email domain for unsubscribe URL")
+            # Construct web URL from email domain (not mailto)
+            unsubscribe_url = f"https://{email_domain}/unsubscribe?email={to_email}"
+        else:
+            unsubscribe_url = f"{frontend_url}/unsubscribe?email={to_email}"
         msg['List-Unsubscribe'] = f"<{unsubscribe_url}>"
         msg['List-Unsubscribe-Post'] = "List-Unsubscribe=One-Click"
         
@@ -1313,53 +1261,96 @@ def get_current_personality(user_data):
         return personality
 
 async def update_streak(email: str, sent_timestamp: Optional[datetime] = None):
-    """Update user streak count based on consecutive days of receiving emails"""
+    """
+    Update streak count based on last email sent date.
+    Streak resets if more than 36 hours (1.5 days) have passed since last email (Snapchat-style).
+    Also updates days_since_start which continues regardless of pauses.
+    Returns: (new_streak, days_since_start)
+    """
     user = await db.users.find_one({"email": email})
     if not user:
-        return
+        return 0, 0
     
     if sent_timestamp is None:
         sent_timestamp = datetime.now(timezone.utc)
     
     last_sent = user.get('last_email_sent')
     current_streak = user.get('streak_count', 0)
+    created_at = user.get('created_at')
     
+    # Calculate days_since_start (continues regardless of pauses)
+    if created_at:
+        if isinstance(created_at, str):
+            try:
+                created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            except:
+                created_at_dt = datetime.fromisoformat(created_at)
+        else:
+            created_at_dt = created_at
+        
+        # Ensure timezone-aware
+        if created_at_dt.tzinfo is None:
+            created_at_dt = created_at_dt.replace(tzinfo=timezone.utc)
+        
+        # Calculate days since account creation
+        days_since_start = (sent_timestamp.date() - created_at_dt.date()).days + 1  # +1 to include today
+        if days_since_start < 1:
+            days_since_start = 1
+    else:
+        days_since_start = 1
+    
+    # Calculate streak (resets if > 36 hours since last email)
     if last_sent:
         if isinstance(last_sent, str):
             try:
-                last_sent = datetime.fromisoformat(last_sent.replace('Z', '+00:00'))
+                last_sent_dt = datetime.fromisoformat(last_sent.replace('Z', '+00:00'))
             except:
-                last_sent = datetime.fromisoformat(last_sent)
+                last_sent_dt = datetime.fromisoformat(last_sent)
+        else:
+            last_sent_dt = last_sent
         
-        # Normalize to dates (ignore time)
-        last_sent_date = last_sent.date()
+        # Ensure timezone-aware
+        if last_sent_dt.tzinfo is None:
+            last_sent_dt = last_sent_dt.replace(tzinfo=timezone.utc)
+        
+        # Calculate time difference in hours
+        time_diff = sent_timestamp - last_sent_dt
+        hours_diff = time_diff.total_seconds() / 3600
+        
+        # Normalize to dates for day comparison
+        last_sent_date = last_sent_dt.date()
         current_date = sent_timestamp.date()
-        
-        # Calculate days difference
         days_diff = (current_date - last_sent_date).days
         
         if days_diff == 0:
-            # Same day - don't increment, keep current streak
-            new_streak = current_streak
-        elif days_diff == 1:
-            # Consecutive day - increment streak
+            # Same day - don't increment streak, keep current
+            new_streak = current_streak if current_streak > 0 else 1
+        elif days_diff == 1 and hours_diff <= 36:
+            # Consecutive day and within 36 hours - increment streak
             new_streak = current_streak + 1
+        elif hours_diff > 36:
+            # More than 36 hours passed - reset streak (Snapchat-style)
+            new_streak = 1
+            logger.info(f"Streak reset for {email}: {hours_diff:.1f} hours passed (>36h threshold)")
         else:
-            # Gap of more than 1 day - reset to 1
+            # Gap of more than 1 day but less than 36 hours - reset to 1
             new_streak = 1
     else:
         # First email ever - start at 1
         new_streak = 1
     
-    # Update streak in database
+    # Update streak and days in database
     await db.users.update_one(
         {"email": email},
-        {"$set": {"streak_count": new_streak}}
+        {"$set": {
+            "streak_count": new_streak,
+            "days_since_start": days_since_start
+        }}
     )
     
-    logger.info(f"Updated streak for {email}: {current_streak} -> {new_streak} (last_sent: {last_sent}, days_diff: {(sent_timestamp.date() - (last_sent.date() if last_sent else sent_timestamp.date())).days if last_sent else 'N/A'})")
+    logger.info(f"Updated streak for {email}: {current_streak} -> {new_streak}, days_since_start: {days_since_start} (last_sent: {last_sent})")
     
-    return new_streak
+    return new_streak, days_since_start
 
 # Send email to a SPECIFIC user (called by scheduler)
 async def send_motivation_to_user(email: str):
@@ -1410,67 +1401,7 @@ async def send_motivation_to_user(email: str):
         # Calculate streak FIRST (before generating message) to use correct streak in email
         sent_dt = datetime.now(timezone.utc)
         sent_timestamp = sent_dt.isoformat()
-        
-        # Get user's global timezone for date comparison (prefer user_timezone over schedule.timezone)
-        user_timezone_str = user_data.get("user_timezone") or user_data.get("schedule", {}).get("timezone", "UTC")
-        user_tz = None
-        try:
-            import pytz
-            user_tz = pytz.timezone(user_timezone_str)
-            # Convert UTC to user's timezone for date comparison
-            sent_dt_user_tz = sent_dt.astimezone(user_tz)
-            current_date = sent_dt_user_tz.date()
-        except Exception as e:
-            logger.warning(f"Invalid timezone {user_timezone_str} for {email}, using UTC: {e}")
-            current_date = sent_dt.date()
-        
-        # Calculate what the streak will be after sending this email
-        current_streak = user_data.get('streak_count', 0)
-        last_sent = user_data.get('last_email_sent')
-        
-        if last_sent:
-            if isinstance(last_sent, str):
-                try:
-                    last_sent_dt = datetime.fromisoformat(last_sent.replace('Z', '+00:00'))
-                except:
-                    last_sent_dt = datetime.fromisoformat(last_sent)
-            else:
-                last_sent_dt = last_sent
-            
-            # Ensure last_sent_dt is timezone-aware (UTC)
-            if last_sent_dt.tzinfo is None:
-                last_sent_dt = last_sent_dt.replace(tzinfo=timezone.utc)
-            
-            # Convert to user's timezone for date comparison
-            if user_tz:
-                try:
-                    last_sent_dt_user_tz = last_sent_dt.astimezone(user_tz)
-                    last_sent_date = last_sent_dt_user_tz.date()
-                except:
-                    # Fallback to UTC if timezone conversion fails
-                    last_sent_date = last_sent_dt.date()
-            else:
-                # Use UTC if user_tz is not available
-                last_sent_date = last_sent_dt.date()
-                
-            days_diff = (current_date - last_sent_date).days
-            
-            if days_diff == 0:
-                # Same day - keep current streak (don't increment)
-                streak_count = current_streak if current_streak > 0 else 1
-                logger.info(f"Streak calculation for {email}: Same day ({current_date}), keeping streak at {streak_count}")
-            elif days_diff == 1:
-                # Consecutive day - increment streak
-                streak_count = current_streak + 1
-                logger.info(f"Streak calculation for {email}: Consecutive day ({last_sent_date} -> {current_date}), incrementing {current_streak} -> {streak_count}")
-            else:
-                # Gap of more than 1 day - reset to 1
-                streak_count = 1
-                logger.info(f"Streak calculation for {email}: Gap of {days_diff} days ({last_sent_date} -> {current_date}), resetting to {streak_count}")
-        else:
-            # First email ever - start at 1
-            streak_count = 1
-            logger.info(f"Streak calculation for {email}: First email ever, starting at {streak_count}")
+        streak_count, days_since_start = await update_streak(email, sent_dt)
         
         # Get previous messages to avoid repetition
         previous_messages = await db.message_history.find(
@@ -1538,6 +1469,16 @@ async def send_motivation_to_user(email: str):
         check_in_lines = check_in_lines or ci_defaults
         quick_reply_lines = quick_reply_lines or qr_defaults
 
+        # Get unsubscribe URL - always use web URL, construct from email domain if FRONTEND_URL not set
+        frontend_url = os.getenv('FRONTEND_URL', '')
+        sender_email = os.getenv('SENDER_EMAIL', '')
+        email_domain = sender_email.split('@')[1] if '@' in sender_email else 'tend.app'
+        if frontend_url:
+            unsubscribe_url = f"{frontend_url}/unsubscribe?email={user_data['email']}"
+        else:
+            # Construct web URL from email domain as fallback (not mailto)
+            unsubscribe_url = f"https://{email_domain}/unsubscribe?email={user_data['email']}"
+        
         html_content = render_email_html(
             streak_count=streak_count,
             streak_icon=streak_icon,
@@ -1545,6 +1486,8 @@ async def send_motivation_to_user(email: str):
             core_message=core_message,
             check_in_lines=check_in_lines,
             quick_reply_lines=quick_reply_lines,
+            unsubscribe_url=unsubscribe_url,
+            days_since_start=days_since_start,
         )
 
         # Create updated user_data with new streak for subject line generation
@@ -1572,7 +1515,8 @@ async def send_motivation_to_user(email: str):
             update_data = {
                 "last_email_sent": sent_timestamp,
                 "last_active": sent_timestamp,
-                "streak_count": streak_count
+                "streak_count": streak_count,
+                "days_since_start": days_since_start
             }
             
             if user_data.get('rotation_mode') == 'sequential' and len(personalities) > 1:
@@ -1730,14 +1674,15 @@ async def send_scheduled_motivations():
                         # Calculate and update streak
                         sent_dt = datetime.now(timezone.utc)
                         sent_timestamp = sent_dt.isoformat()
-                        new_streak = await update_streak(user_data['email'], sent_dt)
+                        new_streak, days_since_start = await update_streak(user_data['email'], sent_dt)
                         
                         # Rotate personality if sequential
                         personalities = user_data.get('personalities', [])
                         update_data = {
                             "last_email_sent": sent_timestamp,
                             "last_active": sent_timestamp,
-                            "streak_count": new_streak
+                            "streak_count": new_streak,
+                            "days_since_start": days_since_start
                         }
                         
                         if user_data.get('rotation_mode') == 'sequential' and len(personalities) > 1:
@@ -1941,57 +1886,220 @@ async def sync_clerk_user(request: Request):
                 if not frontend_url:
                     logger.warning(f"⚠️ FRONTEND_URL not set - welcome email link may be empty")
                 
-                welcome_subject = "Welcome to Tend! Let's Get Started"
+                # Get unsubscribe URL for welcome email - always use web URL
+                sender_email = os.getenv('SENDER_EMAIL', '')
+                email_domain = sender_email.split('@')[1] if '@' in sender_email else 'tend.app'
+                if frontend_url:
+                    unsubscribe_url = f"{frontend_url}/unsubscribe?email={clerk_email}"
+                else:
+                    # Construct web URL from email domain as fallback (not mailto)
+                    unsubscribe_url = f"https://{email_domain}/unsubscribe?email={clerk_email}"
+                
+                welcome_subject = "Welcome to Tend"
                 welcome_html = f"""
-                <html>
+                <!DOCTYPE html>
+                <html lang="en">
                 <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+                    <title>Welcome to Tend</title>
                     <style>
-                        body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 0; color: #1f2933; }}
-                        .wrapper {{ max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; padding: 28px 32px; box-shadow: 0 12px 30px rgba(40,52,71,0.08); }}
-                        .header {{ text-align: center; margin-bottom: 32px; }}
-                        .header h1 {{ font-size: 28px; color: #1b3a61; margin: 0 0 12px 0; }}
-                        .header p {{ font-size: 16px; color: #5a687d; margin: 0; }}
-                        .content {{ font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; color: #1f2933; }}
-                        .cta {{ text-align: center; margin: 32px 0; }}
-                        .cta a {{ display: inline-block; background: #4f46e5; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; }}
-                        .steps {{ background: #f8fafc; border-radius: 8px; padding: 24px; margin: 24px 0; }}
-                        .steps h3 {{ font-size: 18px; color: #1b3a61; margin: 0 0 16px 0; }}
-                        .steps ol {{ margin: 0; padding-left: 24px; color: #1f2933; }}
-                        .steps li {{ margin-bottom: 12px; line-height: 1.6; }}
-                        .footer {{ margin-top: 32px; font-size: 13px; color: #5a687d; text-align: center; }}
-                        .signature {{ margin-top: 28px; font-size: 14px; color: #5a687d; }}
+                        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                        body {{ 
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; 
+                            background: #ffffff;
+                            margin: 0; 
+                            padding: 0;
+                            color: #1a1a1a; 
+                            line-height: 1.6;
+                            -webkit-font-smoothing: antialiased;
+                            -moz-osx-font-smoothing: grayscale;
+                        }}
+                        .email-container {{
+                            max-width: 600px;
+                            margin: 0 auto;
+                            background: #ffffff;
+                        }}
+                        .content-wrapper {{ 
+                            padding: 48px 40px;
+                        }}
+                        .greeting {{
+                            font-size: 26px; 
+                            font-weight: 600; 
+                            color: #1a1a1a; 
+                            margin-bottom: 12px;
+                            letter-spacing: -0.02em;
+                        }}
+                        .intro {{
+                            font-size: 15px; 
+                            color: #9ca3af; 
+                            margin-bottom: 32px;
+                            line-height: 1.6;
+                        }}
+                        .content {{
+                            font-size: 17px; 
+                            line-height: 1.75; 
+                            color: #1a1a1a; 
+                            margin-bottom: 40px;
+                            letter-spacing: -0.01em;
+                        }}
+                        .info-section {{
+                            margin: 40px 0;
+                        }}
+                        .info-title {{
+                            font-size: 10px;
+                            font-weight: 600;
+                            letter-spacing: 0.12em;
+                            text-transform: uppercase;
+                            color: #9ca3af;
+                            margin-bottom: 20px;
+                        }}
+                        .info-list {{
+                            list-style: none;
+                            padding: 0;
+                            margin: 0;
+                        }}
+                        .info-list li {{
+                            font-size: 15px;
+                            line-height: 1.7;
+                            color: #4b5563;
+                            margin-bottom: 14px;
+                            padding-left: 18px;
+                            position: relative;
+                        }}
+                        .info-list li:before {{
+                            content: "";
+                            position: absolute;
+                            left: 0;
+                            top: 10px;
+                            width: 4px;
+                            height: 4px;
+                            background: #d1d5db;
+                            border-radius: 50%;
+                        }}
+                        .info-list li:last-child {{
+                            margin-bottom: 0;
+                        }}
+                        .cta {{
+                            margin: 40px 0;
+                            text-align: center;
+                        }}
+                        .cta a {{
+                            display: inline-block;
+                            background: #000000;
+                            color: #ffffff;
+                            padding: 14px 36px;
+                            text-decoration: none;
+                            font-size: 15px;
+                            font-weight: 500;
+                            border-radius: 6px;
+                            letter-spacing: -0.01em;
+                        }}
+                        .cta a:hover {{
+                            background: #1a1a1a;
+                        }}
+                        .divider {{
+                            height: 1px;
+                            background: #f3f4f6;
+                            margin: 40px 0;
+                            border: none;
+                        }}
+                        .signature {{
+                            font-size: 14px;
+                            color: #6b7280;
+                            margin-top: 48px;
+                            padding-top: 32px;
+                            border-top: 1px solid #f3f4f6;
+                        }}
+                        .footer {{
+                            padding: 32px 40px;
+                            text-align: center;
+                            border-top: 1px solid #f3f4f6;
+                            background: #fafafa;
+                        }}
+                        .footer p {{
+                            font-size: 11px;
+                            color: #9ca3af;
+                            margin: 6px 0;
+                            line-height: 1.5;
+                        }}
+                        .footer a {{
+                            color: #6b7280;
+                            text-decoration: none;
+                            transition: color 0.2s;
+                        }}
+                        .footer a:hover {{
+                            color: #1a1a1a;
+                        }}
+                        .unsubscribe-link {{
+                            display: inline-block;
+                            margin-top: 16px;
+                            padding: 8px 16px;
+                            background: transparent;
+                            border: 1px solid #e5e7eb;
+                            border-radius: 6px;
+                            color: #6b7280;
+                            text-decoration: none;
+                            font-size: 11px;
+                            font-weight: 500;
+                            transition: all 0.2s;
+                        }}
+                        .unsubscribe-link:hover {{
+                            background: #f9fafb;
+                            border-color: #d1d5db;
+                            color: #1a1a1a;
+                        }}
+                        @media (max-width: 600px) {{
+                            .content-wrapper {{
+                                padding: 40px 28px;
+                            }}
+                            .greeting {{
+                                font-size: 24px;
+                            }}
+                            .content {{
+                                font-size: 16px;
+                            }}
+                            .footer {{
+                                padding: 28px 28px;
+                            }}
+                        }}
                     </style>
                 </head>
                 <body>
-                    <div class="wrapper">
-                        <div class="header">
-                            <h1>Welcome to Tend, {html.escape(user_name)}! 🎉</h1>
-                            <p>Your journey to consistent motivation starts now</p>
-                        </div>
-                        <div class="content">
-                            <p>We're thrilled to have you join the Tend community! You've taken the first step toward building lasting habits and achieving your goals.</p>
+                    <div class="email-container">
+                        <div class="content-wrapper">
+                            <div class="greeting">Hi {html.escape(user_name)},</div>
+                            <div class="intro">Welcome to Tend. Your journey to consistent progress starts here.</div>
                             
-                            <div class="steps">
-                                <h3>Getting Started is Easy:</h3>
-                                <ol>
-                                    <li><strong>Complete Your Profile</strong> - Tell us about your goals and what motivates you</li>
-                                    <li><strong>Choose Your Coach</strong> - Select from inspiring personalities or create your own</li>
-                                    <li><strong>Set Your Schedule</strong> - Pick when you want to receive your daily motivation</li>
-                                    <li><strong>Start Your Journey</strong> - Begin receiving personalized messages tailored just for you</li>
-                                </ol>
+                            <div class="content">
+                                <p>We're here to help you build lasting habits through personalized daily messages tailored to your goals.</p>
                             </div>
                             
-                            <p>Our AI-powered coach will send you personalized motivational messages based on your goals, helping you stay consistent and build momentum every single day.</p>
-                        </div>
-                        <div class="cta">
-                            <a href="{frontend_url}">Complete Your Setup →</a>
-                        </div>
-                        <div class="signature">
-                            <p>We're here to support you every step of the way.</p>
-                            <p><strong>Tend Team</strong></p>
+                            <div class="info-section">
+                                <div class="info-title">Getting Started</div>
+                                <ul class="info-list">
+                                    <li>Create your first goal and tell us what you're working toward</li>
+                                    <li>Choose a personality or tone that resonates with you</li>
+                                    <li>Set your schedule for when you want to receive messages</li>
+                                    <li>Start receiving personalized motivation every day</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="cta">
+                                <a href="{frontend_url}">Complete Setup</a>
+                            </div>
+                            
+                            <hr class="divider" />
+                            
+                            <div class="signature">
+                                — Tend
+                            </div>
                         </div>
                         <div class="footer">
-                            <p>You're receiving this email because you just created an account with Tend.</p>
+                            <p>You're receiving this because you created an account with Tend.</p>
+                            {f'<a href="{unsubscribe_url}" class="unsubscribe-link">Unsubscribe</a>' if unsubscribe_url else ''}
+                            <p style="margin-top: 16px;">© {html.escape(str(datetime.now(timezone.utc).year))} Tend. All rights reserved.</p>
                         </div>
                     </div>
                 </body>
@@ -2106,9 +2214,13 @@ async def complete_onboarding(request: OnboardingRequest, req: Request):
     # Ensure user_timezone is set (from onboarding request)
     if request.user_timezone:
         doc['user_timezone'] = request.user_timezone
+        # Sync schedule.timezone with user_timezone
+        if 'schedule' in doc and isinstance(doc['schedule'], dict):
+            doc['schedule']['timezone'] = request.user_timezone
     elif not doc.get('user_timezone'):
         # Fallback to schedule timezone if user_timezone not provided
-        doc['user_timezone'] = doc.get('schedule', {}).get('timezone', 'UTC')
+        schedule_tz = doc.get('schedule', {}).get('timezone', 'UTC')
+        doc['user_timezone'] = schedule_tz
     
     # Activate user after onboarding
     doc['active'] = True
@@ -2220,6 +2332,50 @@ async def update_user(email: str, updates: UserProfileUpdate):
     
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     logger.debug(f"Fields to update: {list(update_data.keys())}")
+    
+    # Sync schedule.timezone with user_timezone when user_timezone is updated
+    if 'user_timezone' in update_data:
+        user_timezone = update_data['user_timezone']
+        # Update schedule.timezone to match user_timezone
+        current_schedule = user.get('schedule', {})
+        if isinstance(current_schedule, dict):
+            current_schedule['timezone'] = user_timezone
+            update_data['schedule'] = current_schedule
+        else:
+            # If schedule doesn't exist, create it with timezone
+            update_data['schedule'] = {
+                'frequency': 'daily',
+                'times': ['09:00'],
+                'timezone': user_timezone,
+                'paused': False,
+                'skip_next': False
+            }
+        logger.info(f"🔄 Syncing schedule.timezone to user_timezone: {user_timezone}")
+    
+    # Also sync schedule.timezone if schedule is being updated but user_timezone is not
+    if 'schedule' in update_data and 'user_timezone' not in update_data:
+        user_timezone = user.get('user_timezone')
+        if user_timezone:
+            # Ensure schedule.timezone matches user_timezone
+            if isinstance(update_data['schedule'], dict):
+                update_data['schedule']['timezone'] = user_timezone
+                logger.info(f"🔄 Syncing schedule.timezone to user_timezone: {user_timezone}")
+    
+    # Handle reactivation: if user is reactivating (setting active: True), clear unsubscribed flag and unpause schedule
+    if 'active' in update_data and update_data['active'] is True:
+        # User is reactivating notifications
+        if user.get('unsubscribed'):
+            update_data['unsubscribed'] = False
+            logger.info(f"🔄 User {email} is reactivating - clearing unsubscribed flag")
+        
+        # Also unpause schedule if it was paused due to unsubscribe
+        current_schedule = user.get('schedule', {})
+        if isinstance(current_schedule, dict) and current_schedule.get('paused'):
+            if 'schedule' not in update_data:
+                update_data['schedule'] = current_schedule.copy()
+            if isinstance(update_data['schedule'], dict):
+                update_data['schedule']['paused'] = False
+                logger.info(f"🔄 User {email} is reactivating - unpausing schedule")
     
     if update_data:
         # Save version history BEFORE updating
@@ -2346,62 +2502,7 @@ async def send_motivation_now(email: str, request: FastAPIRequest):
     
     # Calculate streak FIRST (before generating message) to use correct streak in email
     sent_dt = datetime.now(timezone.utc)
-    
-    # Get user's global timezone for date comparison (prefer user_timezone over schedule.timezone)
-    user_timezone_str = user.get("user_timezone") or user.get("schedule", {}).get("timezone", "UTC")
-    user_tz = None
-    try:
-        import pytz
-        user_tz = pytz.timezone(user_timezone_str)
-        # Convert UTC to user's timezone for date comparison
-        sent_dt_user_tz = sent_dt.astimezone(user_tz)
-        current_date = sent_dt_user_tz.date()
-    except Exception as e:
-        logger.warning(f"Invalid timezone {user_timezone_str} for {email}, using UTC: {e}")
-        current_date = sent_dt.date()
-    
-    current_streak = user.get('streak_count', 0)
-    last_sent = user.get('last_email_sent')
-    
-    if last_sent:
-        if isinstance(last_sent, str):
-            try:
-                last_sent_dt = datetime.fromisoformat(last_sent.replace('Z', '+00:00'))
-            except:
-                last_sent_dt = datetime.fromisoformat(last_sent)
-        else:
-            last_sent_dt = last_sent
-        
-        # Ensure last_sent_dt is timezone-aware (UTC)
-        if last_sent_dt.tzinfo is None:
-            last_sent_dt = last_sent_dt.replace(tzinfo=timezone.utc)
-        
-        # Convert to user's timezone for date comparison
-        if user_tz:
-            try:
-                last_sent_dt_user_tz = last_sent_dt.astimezone(user_tz)
-                last_sent_date = last_sent_dt_user_tz.date()
-            except:
-                # Fallback to UTC if timezone conversion fails
-                last_sent_date = last_sent_dt.date()
-        else:
-            # Use UTC if user_tz is not available
-            last_sent_date = last_sent_dt.date()
-            
-        days_diff = (current_date - last_sent_date).days
-        
-        if days_diff == 0:
-            streak_count = current_streak if current_streak > 0 else 1
-            logger.info(f"Streak calculation (send-now) for {email}: Same day, keeping streak at {streak_count}")
-        elif days_diff == 1:
-            streak_count = current_streak + 1
-            logger.info(f"Streak calculation (send-now) for {email}: Consecutive day, incrementing {current_streak} -> {streak_count}")
-        else:
-            streak_count = 1
-            logger.info(f"Streak calculation (send-now) for {email}: Gap of {days_diff} days, resetting to {streak_count}")
-    else:
-        streak_count = 1
-        logger.info(f"Streak calculation (send-now) for {email}: First email ever, starting at {streak_count}")
+    streak_count, days_since_start = await update_streak(email, sent_dt)
     
     # Generate message using the CALCULATED streak
     message, message_type, used_fallback, research_snippet = await generate_unique_motivational_message(
@@ -2431,6 +2532,16 @@ async def send_motivation_now(email: str, request: FastAPIRequest):
     check_in_lines = check_in_lines or ci_defaults
     quick_reply_lines = quick_reply_lines or qr_defaults
 
+    # Get unsubscribe URL - always use web URL, construct from email domain if FRONTEND_URL not set
+    frontend_url = os.getenv('FRONTEND_URL', '')
+    sender_email = os.getenv('SENDER_EMAIL', '')
+    email_domain = sender_email.split('@')[1] if '@' in sender_email else 'tend.app'
+    if frontend_url:
+        unsubscribe_url = f"{frontend_url}/unsubscribe?email={email}"
+    else:
+        # Construct web URL from email domain as fallback (not mailto)
+        unsubscribe_url = f"https://{email_domain}/unsubscribe?email={email}"
+    
     html_content = render_email_html(
         streak_count=streak_count,
         streak_icon=streak_icon,
@@ -2438,11 +2549,13 @@ async def send_motivation_now(email: str, request: FastAPIRequest):
         core_message=core_message,
         check_in_lines=check_in_lines,
         quick_reply_lines=quick_reply_lines,
+        unsubscribe_url=unsubscribe_url,
     )
     
     # Create updated user with new streak for subject line generation
     updated_user = user.copy()
     updated_user['streak_count'] = streak_count
+    updated_user['days_since_start'] = days_since_start
     
     subject_line = await compose_subject_line(
         personality,
@@ -2476,7 +2589,8 @@ async def send_motivation_now(email: str, request: FastAPIRequest):
                 "$set": {
                     "last_email_sent": sent_dt.isoformat(),
                     "last_active": sent_dt.isoformat(),
-                    "streak_count": streak_count
+                    "streak_count": streak_count,
+                    "days_since_start": days_since_start
                 },
                 "$inc": {"total_messages_received": 1}
             }
@@ -4849,6 +4963,25 @@ async def send_goal_message_at_time(message_id: str):
         # Get user streak and last message
         streak_count = user.get("streak_count", 0)
         
+        # Calculate days_since_start
+        created_at = user.get('created_at')
+        sent_at = datetime.now(timezone.utc)
+        if created_at:
+            if isinstance(created_at, str):
+                try:
+                    created_at_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except:
+                    created_at_dt = datetime.fromisoformat(created_at)
+            else:
+                created_at_dt = created_at
+            if created_at_dt.tzinfo is None:
+                created_at_dt = created_at_dt.replace(tzinfo=timezone.utc)
+            days_since_start = (sent_at.date() - created_at_dt.date()).days + 1
+            if days_since_start < 1:
+                days_since_start = 1
+        else:
+            days_since_start = 1
+        
         # Get last message from this goal first
         last_message = await db.goal_messages.find_one(
             {"goal_id": goal_id, "status": "sent"},
@@ -4916,6 +5049,16 @@ async def send_goal_message_at_time(message_id: str):
         
         streak_icon, streak_message = resolve_streak_badge(streak_count)
         
+        # Get unsubscribe URL - always use web URL, construct from email domain if FRONTEND_URL not set
+        frontend_url = os.getenv('FRONTEND_URL', '')
+        sender_email = os.getenv('SENDER_EMAIL', '')
+        email_domain = sender_email.split('@')[1] if '@' in sender_email else 'tend.app'
+        if frontend_url:
+            unsubscribe_url = f"{frontend_url}/unsubscribe?email={user_email}"
+        else:
+            # Construct web URL from email domain as fallback (not mailto)
+            unsubscribe_url = f"https://{email_domain}/unsubscribe?email={user_email}"
+        
         # Use the main goal template (render_email_html) for all goals
         html_content = render_email_html(
             streak_count=streak_count,
@@ -4924,6 +5067,8 @@ async def send_goal_message_at_time(message_id: str):
             core_message=core_message,
             check_in_lines=check_in_lines,
             quick_reply_lines=quick_reply_lines,
+            unsubscribe_url=unsubscribe_url,
+            days_since_start=days_since_start,
         )
         
         success, error = await send_email(user_email, subject, html_content)
@@ -5651,15 +5796,23 @@ async def get_goal_history(email: str, goal_id: str, limit: int = 50):
 
 @api_router.post("/unsubscribe")
 async def unsubscribe(email: str):
-    """Unsubscribe user from all goal emails"""
+    """Unsubscribe user from all goal emails - turns off notifications but keeps account intact"""
     user = await db.users.find_one({"email": email})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Mark user as unsubscribed
+    # Get current schedule or create default
+    current_schedule = user.get("schedule", {})
+    
+    # Mark user as unsubscribed, inactive, and pause schedule
+    # This stops all emails but keeps the account, goals, streaks, and all data intact
     await db.users.update_one(
         {"email": email},
-        {"$set": {"unsubscribed": True}}
+        {"$set": {
+            "unsubscribed": True,
+            "active": False,  # Turn off email notifications in settings
+            "schedule.paused": True  # Pause schedule to prevent any emails
+        }}
     )
     
     # Cancel all pending goal messages
@@ -5668,8 +5821,21 @@ async def unsubscribe(email: str):
         {"$set": {"status": "skipped", "error_message": "User unsubscribed"}}
     )
     
-    logger.info(f"User {email} unsubscribed from goal emails")
-    return {"status": "success", "message": "You have been unsubscribed from all goal emails"}
+    # Log the unsubscribe activity
+    try:
+        await tracker.log_user_activity(
+            action_type="unsubscribe",
+            user_email=email,
+            details={"unsubscribed_at": datetime.now(timezone.utc).isoformat()}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log unsubscribe activity: {str(e)}")
+    
+    logger.info(f"User {email} unsubscribed from goal emails (account preserved, can reactivate)")
+    return {
+        "status": "success", 
+        "message": "You have been unsubscribed from all emails. Your account and data are preserved. You can reactivate notifications anytime in settings."
+    }
 
 # ============================================================================
 # FEATURE 1: GAMIFICATION & ACHIEVEMENTS

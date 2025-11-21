@@ -14,7 +14,7 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import API_CONFIG from '@/config/api';
 const API = API_CONFIG.API_BASE;
 
-export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email, user, refreshKey = 0, onNewAchievements }) {
+export function AnalyticsDashboard({ email, user, refreshKey = 0, onNewAchievements }) {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -24,7 +24,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
 
   const fetchAnalytics = useCallback(async (showLoading = true) => {
     if (showLoading) {
-    setLoading(true);
+      setLoading(true);
     } else {
       setRefreshing(true);
     }
@@ -50,9 +50,9 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
         // Silently fail - achievements are optional
       }
       
-      // Fetch message history for charts
+      // Fetch message history for charts - increased limit for better accuracy
       try {
-        const historyResponse = await axios.get(`${API}/users/${email}/message-history?limit=100`);
+        const historyResponse = await axios.get(`${API}/users/${email}/message-history?limit=500`);
         setMessageHistory(historyResponse.data.messages || []);
       } catch (error) {
         // Silently fail - message history is optional
@@ -65,27 +65,22 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
     }
   }, [email, onNewAchievements]);
 
+  // Fetch analytics when refreshKey changes or on mount
   useEffect(() => {
     fetchAnalytics();
-  }, [fetchAnalytics, refreshKey]);
+  }, [refreshKey, email, fetchAnalytics]); // Include fetchAnalytics to ensure it's called with latest values
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchAnalytics(false); // Silent refresh
-    }, 30000); // 30 seconds
+  // Note: Auto-refresh is handled by parent component to prevent multiple overlapping refreshes
 
-    return () => clearInterval(interval);
-  }, [fetchAnalytics]);
-
-  // Prepare chart data with enhanced analytics
+  // Prepare chart data with enhanced analytics - recalculate when messageHistory or refreshKey changes
   const chartData = useMemo(() => {
     if (!messageHistory || messageHistory.length === 0) return { 
       activityData: [], 
       ratingData: [], 
       personalityData: [],
       weeklyTrend: [],
-      engagementTrend: []
+      engagementTrend: [],
+      avgMessages: 0
     };
 
     // 1. Message Activity Over Time (Last 30 days) - Enhanced with trends
@@ -166,7 +161,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
         messages: stats.total,
         ratingCount: stats.count
       }))
-      .sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating))
+      .sort((a, b) => b.messages - a.messages) // Sort by messages sent, not rating
       .slice(0, 6); // Top 6
 
     // 4. Weekly Trend (Last 4 weeks)
@@ -241,7 +236,7 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
       engagementTrend,
       avgMessages
     };
-  }, [messageHistory]);
+  }, [messageHistory, refreshKey]); // Include refreshKey to force recalculation
 
 
   // Early returns AFTER all hooks
@@ -429,16 +424,28 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
           <CardHeader className="pb-3 px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <CardTitle className="text-sm font-semibold text-foreground">Daily Activity Trend</CardTitle>
-              {chartData.activityData.length > 0 && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>Avg: {chartData.avgMessages?.toFixed(1) || 0}/day</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {chartData.activityData.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    <span>Avg: {chartData.avgMessages?.toFixed(1) || 0}/day</span>
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => fetchAnalytics(false)}
+                  disabled={refreshing}
+                  className="h-7 w-7 p-0"
+                  title="Refresh charts"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
             {chartData.activityData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220} className="sm:h-[240px]">
+              <ResponsiveContainer width="100%" height={220} className="sm:h-[240px]" key={`activity-${refreshKey}-${messageHistory.length}`}>
                 <AreaChart data={chartData.activityData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
@@ -507,16 +514,28 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
           <CardHeader className="pb-3 px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <CardTitle className="text-sm font-semibold text-foreground">Rating Distribution</CardTitle>
-              {chartData.ratingData.some(d => d.count > 0) && (
-                <div className="text-xs text-muted-foreground">
-                  {chartData.ratingData.reduce((sum, d) => sum + d.count, 0)} total ratings
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {chartData.ratingData.some(d => d.count > 0) && (
+                  <div className="text-xs text-muted-foreground">
+                    {chartData.ratingData.reduce((sum, d) => sum + d.count, 0)} total ratings
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => fetchAnalytics(false)}
+                  disabled={refreshing}
+                  className="h-7 w-7 p-0"
+                  title="Refresh charts"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
             {chartData.ratingData.some(d => d.count > 0) ? (
-              <ResponsiveContainer width="100%" height={220} className="sm:h-[240px]">
+              <ResponsiveContainer width="100%" height={220} className="sm:h-[240px]" key={`rating-${refreshKey}-${messageHistory.length}`}>
                 <BarChart data={chartData.ratingData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
                   <XAxis 
@@ -571,11 +590,23 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
         {/* Weekly Message Trend */}
         {chartData.weeklyTrend.length > 0 && (
           <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
-            <CardHeader className="pb-3 px-4 sm:px-6">
+          <CardHeader className="pb-3 px-4 sm:px-6">
+            <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold text-foreground">Weekly Message Trend</CardTitle>
-            </CardHeader>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchAnalytics(false)}
+                disabled={refreshing}
+                className="h-7 w-7 p-0"
+                title="Refresh charts"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+              </Button>
+            </div>
+          </CardHeader>
             <CardContent className="px-4 sm:px-6">
-              <ResponsiveContainer width="100%" height={200} className="sm:h-[220px]">
+              <ResponsiveContainer width="100%" height={200} className="sm:h-[220px]" key={`weekly-${refreshKey}-${messageHistory.length}`}>
                 <BarChart data={chartData.weeklyTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
                   <XAxis 
@@ -622,11 +653,23 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
         {/* Engagement Trend */}
         {chartData.engagementTrend.length > 0 && (
           <Card className="border border-border/50 hover:border-border hover:shadow-lg transition-all duration-300 bg-card/50 backdrop-blur-sm">
-            <CardHeader className="pb-3 px-4 sm:px-6">
+          <CardHeader className="pb-3 px-4 sm:px-6">
+            <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold text-foreground">Engagement Rate Trend</CardTitle>
-            </CardHeader>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchAnalytics(false)}
+                disabled={refreshing}
+                className="h-7 w-7 p-0"
+                title="Refresh charts"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+              </Button>
+            </div>
+          </CardHeader>
             <CardContent className="px-4 sm:px-6">
-              <ResponsiveContainer width="100%" height={200} className="sm:h-[220px]">
+              <ResponsiveContainer width="100%" height={200} className="sm:h-[220px]" key={`engagement-${refreshKey}-${messageHistory.length}`}>
                 <LineChart data={chartData.engagementTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
                   <XAxis 
@@ -678,21 +721,34 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
           <CardHeader className="pb-3 px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <CardTitle className="text-sm font-semibold text-foreground">Top Personalities Performance</CardTitle>
-              <div className="text-xs text-muted-foreground">
-                Ranked by average rating
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-muted-foreground">
+                  Ranked by messages sent
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => fetchAnalytics(false)}
+                  disabled={refreshing}
+                  className="h-7 w-7 p-0"
+                  title="Refresh charts"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+                </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
-            <ResponsiveContainer width="100%" height={250} className="sm:h-[280px]">
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[280px]" key={`personality-${refreshKey}-${messageHistory.length}`}>
               <BarChart data={chartData.personalityData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" opacity={0.3} />
                 <XAxis 
                   type="number"
-                  domain={[0, 5]}
+                  domain={[0, 'dataMax']}
                   tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                   axisLine={false}
                   tickLine={false}
+                  label={{ value: 'Messages Sent', position: 'insideBottom', offset: -5, style: { textAnchor: 'middle', fill: 'hsl(var(--muted-foreground))', fontSize: 11 } }}
                 />
                   <YAxis 
                   type="category" 
@@ -713,13 +769,13 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                   }}
                   formatter={(value, name, props) => [
-                    `${value}★ (${props.payload.messages} messages, ${props.payload.ratingCount} ratings)`,
-                    'Avg Rating'
+                    `${value} messages (Avg rating: ${props.payload.rating}★, ${props.payload.ratingCount} ratings)`,
+                    'Messages Sent'
                   ]}
                   labelFormatter={(label) => `Personality: ${label}`}
                 />
                 <Bar 
-                  dataKey="rating" 
+                  dataKey="messages" 
                   radius={[0, 8, 8, 0]}
                 >
                   {chartData.personalityData.map((entry, index) => {
@@ -794,4 +850,4 @@ export const AnalyticsDashboard = React.memo(function AnalyticsDashboard({ email
       )}
     </div>
   );
-});
+}

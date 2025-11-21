@@ -80,7 +80,7 @@ export function DashboardLayout({
                 variant="ghost"
                 size="icon"
                 onClick={onLogout}
-                className="h-10 w-10 text-muted-foreground hover:text-foreground"
+                className="h-10 w-10 text-muted-foreground hover:text-foreground/70 transition-colors"
                 data-testid="logout-btn"
                 title="Logout"
               >
@@ -148,7 +148,7 @@ export function DashboardLayout({
             <Button
               variant="ghost"
               onClick={onLogout}
-              className="w-full justify-start text-muted-foreground hover:text-foreground"
+              className="w-full justify-start text-muted-foreground hover:text-foreground/70 transition-colors"
               data-testid="logout-btn"
             >
               <LogOut className="h-4 w-4" />
@@ -220,7 +220,7 @@ export function DashboardLayout({
                         "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 flex-shrink-0 relative group",
                         isActive
                           ? "text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          : "text-muted-foreground hover:text-foreground/70 hover:bg-muted/40"
                       )}
                     >
                       <Icon className={cn(
@@ -323,7 +323,7 @@ export function DashboardLayout({
                           "h-6 w-6 sm:h-[26px] sm:w-[26px] transition-all duration-200", 
                           isActive 
                             ? "text-primary" 
-                            : "text-muted-foreground group-hover:text-foreground"
+                            : "text-muted-foreground group-hover:text-foreground/70"
                         )}
                         strokeWidth={isActive ? 2.5 : 1.75}
                       />
@@ -333,7 +333,7 @@ export function DashboardLayout({
                           "h-6 w-6 sm:h-[26px] sm:w-[26px] transition-all duration-200", 
                           isActive 
                             ? "text-primary" 
-                            : "text-muted-foreground group-hover:text-foreground"
+                            : "text-muted-foreground group-hover:text-foreground/70"
                         )}
                         strokeWidth={isActive ? 2.5 : 1.75}
                       />

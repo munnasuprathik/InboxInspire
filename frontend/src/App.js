@@ -7,6 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/animate-ui/components/radix/dropdown-menu';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from "@/components/animate-ui/components/headless/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +20,7 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationList, showNotification } from "@/components/animate-ui/components/community/notification-list";
 import { SignedIn, SignedOut, SignIn, SignUp, useUser, useClerk, UserProfile } from "@clerk/clerk-react";
-import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, History, TrendingUp, Globe, RefreshCw, Flame, Star, Loader2, AlertTriangle, Download, Eye, Filter, Database, Search, Calendar, Play, Megaphone, Trophy, Award, Target, Zap, BookOpen, Book, X, Satellite, Goal, Calendar as CalendarIcon, MessageSquare, Wifi, Activity, Settings, CircleDot, Sun as Sunburst } from "lucide-react";
+import { CheckCircle, Mail, Sparkles, Clock, User, LogOut, Send, Edit, Shield, BarChart3, Users, History, TrendingUp, Globe, RefreshCw, Flame, Star, Loader2, AlertTriangle, Download, Eye, Filter, Database, Search, Calendar, Play, Megaphone, Trophy, Award, Target, Zap, BookOpen, Book, X, Satellite, Goal, Calendar as CalendarIcon, MessageSquare, Wifi, Activity, Settings, CircleDot, Sun as Sunburst, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { MessageHistory } from "@/components/MessageHistory";
 import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
@@ -25,6 +31,7 @@ import { RealTimeAnalytics } from "@/components/RealTimeAnalytics";
 import { AdminUserDetails } from "@/components/AdminUserDetails";
 import { AchievementCelebration } from "@/components/AchievementCelebration";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { UnsubscribePage } from "@/components/UnsubscribePage";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { BackendConnectionStatus } from "@/components/BackendConnectionStatus";
@@ -87,6 +94,161 @@ const TONE_OPTIONS = [
   "Coach-Like & Accountability",
   "Storytelling & Narrative"
 ];
+
+// Custom dropdown component for personality selection using DropdownMenu
+// Optimized for mobile with touch-friendly sizing
+function PersonalityDropdown({ options, value, placeholder, onSelect }) {
+  const [open, setOpen] = useState(false);
+
+  const handleSelect = (selectedValue) => {
+    onSelect(selectedValue);
+    setOpen(false);
+  };
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 sm:h-12 text-base w-full justify-between font-normal touch-manipulation active:scale-[0.98] transition-transform"
+        >
+          <span className="truncate flex-1 text-left mr-2">{value || placeholder}</span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 opacity-50 transition-transform", open && "rotate-180")} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-[60vh] overflow-y-auto p-1 z-[9999]"
+        align="start"
+        sideOffset={4}
+        side="bottom"
+      >
+        {options.map((option) => (
+          <DropdownMenuItem
+            key={option}
+            onClick={() => handleSelect(option)}
+            className={cn(
+              "min-h-[44px] sm:min-h-[36px] px-4 py-3 text-base sm:text-sm touch-manipulation cursor-pointer",
+              "active:bg-accent/80 transition-colors",
+              value === option && "bg-accent font-medium"
+            )}
+          >
+            <span className="truncate block">{option}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Custom dropdown component for timezone selection using DropdownMenu
+// Optimized for mobile with touch-friendly sizing
+function TimezoneDropdown({ value, onSelect, placeholder = "Select timezone" }) {
+  const [open, setOpen] = useState(false);
+
+  const getDisplayValue = () => {
+    if (!value) return placeholder;
+    const tz = TIMEZONES.find(t => t.value === value);
+    return tz ? tz.label : value;
+  };
+
+  const handleSelect = (selectedValue) => {
+    onSelect(selectedValue);
+    setOpen(false);
+  };
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 sm:h-12 text-base w-full justify-between font-normal touch-manipulation active:scale-[0.98] transition-transform"
+        >
+          <span className="truncate flex-1 text-left mr-2">{getDisplayValue()}</span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 opacity-50 transition-transform", open && "rotate-180")} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-[60vh] overflow-y-auto p-1 z-[9999]"
+        align="start"
+        sideOffset={4}
+        side="bottom"
+      >
+        {TIMEZONES.map((tz) => (
+          <DropdownMenuItem
+            key={tz.value}
+            onClick={() => handleSelect(tz.value)}
+            className={cn(
+              "min-h-[44px] sm:min-h-[36px] px-4 py-3 text-base sm:text-sm touch-manipulation cursor-pointer",
+              "active:bg-accent/80 transition-colors",
+              value === tz.value && "bg-accent font-medium"
+            )}
+          >
+            <span className="truncate block">{tz.label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Custom dropdown component for frequency selection using DropdownMenu
+// Optimized for mobile with touch-friendly sizing
+function FrequencyDropdown({ value, onSelect, placeholder = "Select frequency" }) {
+  const [open, setOpen] = useState(false);
+  const frequencies = [
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" }
+  ];
+
+  const getDisplayValue = () => {
+    if (!value) return placeholder;
+    const freq = frequencies.find(f => f.value === value);
+    return freq ? freq.label : value.charAt(0).toUpperCase() + value.slice(1);
+  };
+
+  const handleSelect = (selectedValue) => {
+    onSelect(selectedValue);
+    setOpen(false);
+  };
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 sm:h-12 text-base w-full justify-between font-normal touch-manipulation active:scale-[0.98] transition-transform"
+        >
+          <span className="truncate flex-1 text-left mr-2">{getDisplayValue()}</span>
+          <ChevronDown className={cn("h-4 w-4 shrink-0 opacity-50 transition-transform", open && "rotate-180")} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="w-[var(--radix-dropdown-menu-trigger-width)] p-1 z-[9999]"
+        align="start"
+        sideOffset={4}
+        side="bottom"
+      >
+        {frequencies.map((freq) => (
+          <DropdownMenuItem
+            key={freq.value}
+            onClick={() => handleSelect(freq.value)}
+            className={cn(
+              "min-h-[44px] sm:min-h-[36px] px-4 py-3 text-base sm:text-sm touch-manipulation cursor-pointer",
+              "active:bg-accent/80 transition-colors",
+              value === freq.value && "bg-accent font-medium"
+            )}
+          >
+            {freq.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function AuthScreen() {
   const currentRoute = getCurrentRoute();
@@ -221,14 +383,6 @@ function OnboardingScreen({ email, onComplete }) {
     rotationMode: "sequential",
     frequency: "daily",
     time: "09:00",
-    timezone: (() => {
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        return typeof tz === 'string' ? tz : "UTC";
-      } catch {
-        return "UTC";
-      }
-    })(),
     user_timezone: (() => {
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -236,7 +390,7 @@ function OnboardingScreen({ email, onComplete }) {
       } catch {
         return "UTC";
       }
-    })(), // NEW: Global timezone for dashboard
+    })(), // Single timezone for dashboard and schedule
     deadline: null
   });
   const [loading, setLoading] = useState(false);
@@ -337,7 +491,7 @@ function OnboardingScreen({ email, onComplete }) {
       const schedule = {
         frequency: formData.frequency,
         times: [formData.time],
-        timezone: formData.timezone,
+        timezone: formData.user_timezone || "UTC", // Sync schedule timezone with user_timezone
         paused: false,
         skip_next: false,
         end_date: formData.deadline || null
@@ -350,7 +504,7 @@ function OnboardingScreen({ email, onComplete }) {
         personalities: formData.personalities,
         rotation_mode: "sequential",
         schedule,
-        user_timezone: formData.user_timezone || formData.timezone || "UTC"  // NEW: Send global timezone
+        user_timezone: formData.user_timezone || "UTC"  // Single timezone for dashboard and schedule
       });
 
       showNotification({ type: 'success', message: "Welcome to Tend!", title: "Welcome" });
@@ -393,75 +547,83 @@ function OnboardingScreen({ email, onComplete }) {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-3xl mx-auto">
-        <div className="text-center mb-8 mt-4">
-          <h1 className="text-4xl md:text-5xl font-bold mb-2">Welcome!</h1>
-          <p className="text-muted-foreground">Let's personalize your inspiration journey</p>
+    <div className="min-h-screen p-3 sm:p-4 md:p-6 lg:p-8 bg-gradient-to-b from-background to-muted/20">
+      <div className="max-w-2xl mx-auto">
+        {/* Header - Compact on mobile */}
+        <div className="text-center mb-4 sm:mb-6 mt-2 sm:mt-4">
+          <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 mb-3 sm:mb-4">
+            <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 sm:mb-2">Welcome!</h1>
+          <p className="text-sm sm:text-base text-muted-foreground px-2">Let's personalize your inspiration journey</p>
         </div>
 
-        {/* Progress */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {[1, 2, 3, 4].map((s) => (
+        {/* Progress - Compact on mobile */}
+        <div className="flex items-center justify-center gap-1 sm:gap-2 mb-4 sm:mb-6 px-2">
+          {[1, 2, 3, 4, 5].map((s) => (
             <div key={s} className="flex items-center">
-              <div className={`h-10 w-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                step >= s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              <div className={`h-7 w-7 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs sm:text-sm md:text-base font-semibold transition-all ${
+                step >= s ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-muted-foreground'
               }`}>{s}</div>
-              {s < 4 && <div className={`h-1 w-8 mx-1 transition-all ${step > s ? 'bg-primary' : 'bg-muted'}`} />}
+              {s < 5 && <div className={`h-0.5 sm:h-1 w-4 sm:w-6 md:w-8 mx-0.5 sm:mx-1 transition-all ${step > s ? 'bg-primary' : 'bg-muted'}`} />}
             </div>
           ))}
         </div>
 
         {step === 1 && (
-          <Card className="shadow-xl">
-            <CardHeader>
-              <CardTitle>What's your name?</CardTitle>
-              <CardDescription>We'll use this to personalize your messages</CardDescription>
+          <Card className="shadow-lg sm:shadow-xl border-border/50">
+            <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl md:text-2xl">What's your name?</CardTitle>
+              <CardDescription className="text-sm sm:text-base mt-1">We'll use this to personalize your messages</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               <form onSubmit={handleSubmitName} className="space-y-4">
                 <Input
                   placeholder="Your name"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   data-testid="name-input"
+                  className="h-11 sm:h-12 text-base"
                   required
+                  autoFocus
                 />
-                <Button type="submit" className="w-full" data-testid="name-next-btn">Continue</Button>
+                <Button type="submit" className="w-full h-11 sm:h-12 text-base font-medium" data-testid="name-next-btn">
+                  Continue
+                </Button>
               </form>
             </CardContent>
           </Card>
         )}
 
         {step === 2 && (
-          <Card className="group hover:shadow-lg transition-all duration-200">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-accent transition-colors">
-                  <Target className="h-5 w-5 text-foreground" />
+          <Card className="shadow-lg sm:shadow-xl border-border/50">
+            <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0 mt-0.5">
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <CardTitle className="text-xl sm:text-2xl">Tell us about your goals</CardTitle>
-                  <CardDescription className="mt-1">What are you working towards?</CardDescription>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-lg sm:text-xl md:text-2xl">Tell us about your goals</CardTitle>
+                  <CardDescription className="text-sm sm:text-base mt-1">What are you working towards?</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <form onSubmit={handleSubmitGoals} className="space-y-5">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4 sm:space-y-5">
+              <form onSubmit={handleSubmitGoals} className="space-y-4 sm:space-y-5">
                 <div>
-                  <Label className="text-sm font-medium mb-2 block">Your Goals</Label>
+                  <Label className="text-sm sm:text-base font-medium mb-2 block">Your Goals</Label>
                   <Textarea
                     placeholder="I'm working on building my startup, learning to code, getting fit..."
                     value={formData.goals}
                     onChange={(e) => setFormData({...formData, goals: e.target.value})}
-                    className="min-h-32 resize-none"
+                    className="min-h-28 sm:min-h-32 resize-none text-base"
                     data-testid="goals-input"
                     required
                   />
                 </div>
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 h-11">Back</Button>
-                  <Button type="submit" className="flex-1 h-11" data-testid="goals-next-btn">Continue</Button>
+                <div className="flex gap-2 sm:gap-3 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 h-11 sm:h-12 text-base">Back</Button>
+                  <Button type="submit" className="flex-1 h-11 sm:h-12 text-base font-medium" data-testid="goals-next-btn">Continue</Button>
                 </div>
               </form>
             </CardContent>
@@ -469,124 +631,120 @@ function OnboardingScreen({ email, onComplete }) {
         )}
 
         {step === 3 && (
-          <Card className="group hover:shadow-lg transition-all duration-200">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-accent transition-colors">
-                  <Users className="h-5 w-5 text-foreground" />
+          <Card className="shadow-lg sm:shadow-xl border-border/50">
+            <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0 mt-0.5">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <CardTitle className="text-xl sm:text-2xl">Choose Your Inspiration Style</CardTitle>
-                  <CardDescription className="mt-1">Add one or more personalities to rotate through</CardDescription>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-lg sm:text-xl md:text-2xl">Choose Your Inspiration Style</CardTitle>
+                  <CardDescription className="text-sm sm:text-base mt-1">Add one or more personalities to rotate through</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-6">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4 sm:space-y-5">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Added Personalities */}
                 {formData.personalities.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Your Personalities ({formData.personalities.length})</Label>
-                    {formData.personalities.map((p, i) => {
-                      const displayValue = safePersonalityValue(p);
-                      return (
-                      <div key={i} className="flex items-center justify-between p-3 border rounded-lg gap-2">
-                        <span className="font-medium truncate flex-1 min-w-0">{displayValue}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setFormData({
-                            ...formData,
-                            personalities: formData.personalities.filter((_, idx) => idx !== i)
-                          })}
-                          className="flex-shrink-0"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                      );
-                    })}
+                    <Label className="text-sm sm:text-base font-medium">Your Personalities ({formData.personalities.length})</Label>
+                    <div className="space-y-2">
+                      {formData.personalities.map((p, i) => {
+                        const displayValue = safePersonalityValue(p);
+                        return (
+                        <div key={i} className="flex items-center justify-between p-3 sm:p-3.5 border rounded-lg gap-2 bg-card">
+                          <span className="font-medium text-sm sm:text-base truncate flex-1 min-w-0">{displayValue}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFormData({
+                              ...formData,
+                              personalities: formData.personalities.filter((_, idx) => idx !== i)
+                            })}
+                            className="flex-shrink-0 h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {/* Add New Personality */}
-                <div className="space-y-4 p-4 border-2 border-dashed rounded-lg">
-                  <Label>Add Personality</Label>
+                <div className="space-y-3 sm:space-y-4 p-3 sm:p-4 border-2 border-dashed rounded-lg bg-muted/30">
+                  <Label className="text-sm sm:text-base font-medium">Add Personality</Label>
                   <RadioGroup 
                     value={formData.currentPersonality.type} 
-                    onValueChange={(value) => setFormData({
-                      ...formData, 
-                      currentPersonality: { type: value, value: "", customValue: "" }
-                    })}
+                    onValueChange={(value) => {
+                      setFormData({
+                        ...formData, 
+                        currentPersonality: { type: value, value: "", customValue: "" }
+                      });
+                    }}
+                    className="grid grid-cols-3 gap-2 sm:gap-3"
                   >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="famous" id="famous" />
-                      <Label htmlFor="famous" className="font-normal cursor-pointer">Famous</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="tone" id="tone" />
-                      <Label htmlFor="tone" className="font-normal cursor-pointer">Tone</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="custom" id="custom" />
-                      <Label htmlFor="custom" className="font-normal cursor-pointer">Custom</Label>
-                    </div>
+                    <label htmlFor="famous" className="flex items-center justify-center space-x-2 cursor-pointer select-none p-2.5 sm:p-3 border rounded-lg hover:bg-accent transition-colors">
+                      <RadioGroupItem value="famous" id="famous" className="mr-1" />
+                      <span className="font-normal text-xs sm:text-sm">Famous</span>
+                    </label>
+                    <label htmlFor="tone" className="flex items-center justify-center space-x-2 cursor-pointer select-none p-2.5 sm:p-3 border rounded-lg hover:bg-accent transition-colors">
+                      <RadioGroupItem value="tone" id="tone" className="mr-1" />
+                      <span className="font-normal text-xs sm:text-sm">Tone</span>
+                    </label>
+                    <label htmlFor="custom" className="flex items-center justify-center space-x-2 cursor-pointer select-none p-2.5 sm:p-3 border rounded-lg hover:bg-accent transition-colors">
+                      <RadioGroupItem value="custom" id="custom" className="mr-1" />
+                      <span className="font-normal text-xs sm:text-sm">Custom</span>
+                    </label>
                   </RadioGroup>
 
                   {formData.currentPersonality.type === "famous" && (
-                    <Select 
-                      value={safeSelectValue(formData.currentPersonality.value, '')} 
-                      onValueChange={(value) => setFormData({
-                        ...formData, 
-                        currentPersonality: {...formData.currentPersonality, value}
-                      })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FAMOUS_PERSONALITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {formData.currentPersonality.type === "tone" && (
-                    <Select 
-                      value={safeSelectValue(formData.currentPersonality.value, '')} 
-                      onValueChange={(value) => setFormData({
+                    <PersonalityDropdown
+                      options={FAMOUS_PERSONALITIES}
+                      value={formData.currentPersonality.value}
+                      placeholder="Choose a famous personality"
+                      onSelect={(value) => setFormData({
                         ...formData,
                         currentPersonality: {...formData.currentPersonality, value}
                       })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TONE_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    />
+                  )}
+
+                  {formData.currentPersonality.type === "tone" && (
+                    <PersonalityDropdown
+                      options={TONE_OPTIONS}
+                      value={formData.currentPersonality.value}
+                      placeholder="Choose a tone"
+                      onSelect={(value) => setFormData({
+                        ...formData,
+                        currentPersonality: {...formData.currentPersonality, value}
+                      })}
+                    />
                   )}
 
                   {formData.currentPersonality.type === "custom" && (
                     <Textarea
-                      placeholder="Describe style..."
+                      placeholder="Describe the personality style you want..."
                       value={formData.currentPersonality.customValue}
                       onChange={(e) => setFormData({
                         ...formData,
                         currentPersonality: {...formData.currentPersonality, customValue: e.target.value}
                       })}
                       rows={3}
+                      className="text-base resize-none"
                     />
                   )}
 
-                  <Button type="button" variant="outline" onClick={handleAddPersonality} className="w-full">
+                  <Button type="button" variant="outline" onClick={handleAddPersonality} className="w-full h-11 sm:h-12 text-base">
                     Add This Personality
                   </Button>
                 </div>
 
-                <div className="flex gap-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
-                  <Button onClick={handleSubmitPersonality} className="flex-1">Continue</Button>
+                <div className="flex gap-2 sm:gap-3 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 h-11 sm:h-12 text-base">Back</Button>
+                  <Button onClick={handleSubmitPersonality} className="flex-1 h-11 sm:h-12 text-base font-medium">Continue</Button>
                 </div>
               </div>
             </CardContent>
@@ -594,124 +752,89 @@ function OnboardingScreen({ email, onComplete }) {
         )}
 
         {step === 4 && (
-          <Card className="group hover:shadow-lg transition-all duration-200">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-accent transition-colors">
-                  <Globe className="h-5 w-5 text-foreground" />
+          <Card className="shadow-lg sm:shadow-xl border-border/50">
+            <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0 mt-0.5">
+                  <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <CardTitle className="text-xl sm:text-2xl">Set Your Timezone</CardTitle>
-                  <CardDescription className="mt-1">This will be used for all dates and times across your dashboard</CardDescription>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-lg sm:text-xl md:text-2xl">Set Your Timezone</CardTitle>
+                  <CardDescription className="text-sm sm:text-base mt-1">This will be used for all dates and times across your dashboard</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4 sm:space-y-5">
               <div>
-                <Label className="flex items-center gap-2 mb-2">
+                <Label className="flex items-center gap-2 mb-2 text-sm sm:text-base font-medium">
                   <Globe className="h-4 w-4" />
                   Your Timezone
                 </Label>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-3">
                   All dates, times, streaks, and analytics will be displayed in this timezone.
                 </p>
-                <Select 
-                  value={safeSelectValue(formData.user_timezone, (() => {
-                    try {
-                      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                      return typeof tz === 'string' ? tz : "UTC";
-                    } catch {
-                      return "UTC";
-                    }
-                  })())} 
-                  onValueChange={(value) => setFormData({...formData, user_timezone: value})}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {TIMEZONES.map((tz) => (
-                      <SelectItem key={tz.value} value={tz.value}>
-                        {tz.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="mt-2">
+                  <TimezoneDropdown
+                    value={formData.user_timezone || (() => {
+                      try {
+                        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        return typeof tz === 'string' ? tz : "UTC";
+                      } catch {
+                        return "UTC";
+                      }
+                    })()}
+                    onSelect={(value) => setFormData({...formData, user_timezone: value})}
+                    placeholder="Select your timezone"
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setStep(3)} className="flex-1 h-11">Back</Button>
-                <Button onClick={() => setStep(5)} className="flex-1 h-11">Continue</Button>
+              <div className="flex gap-2 sm:gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setStep(3)} className="flex-1 h-11 sm:h-12 text-base">Back</Button>
+                <Button onClick={() => setStep(5)} className="flex-1 h-11 sm:h-12 text-base font-medium">Continue</Button>
               </div>
             </CardContent>
           </Card>
         )}
 
         {step === 5 && (
-          <Card className="group hover:shadow-lg transition-all duration-200">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-accent transition-colors">
-                  <CalendarIcon className="h-5 w-5 text-foreground" />
+          <Card className="shadow-lg sm:shadow-xl border-border/50">
+            <CardHeader className="pb-3 sm:pb-4 px-4 sm:px-6">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0 mt-0.5">
+                  <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <CardTitle className="text-xl sm:text-2xl">Schedule Your Inspiration</CardTitle>
-                  <CardDescription className="mt-1">When should we send your messages?</CardDescription>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-lg sm:text-xl md:text-2xl">Schedule Your Inspiration</CardTitle>
+                  <CardDescription className="text-sm sm:text-base mt-1">When should we send your messages?</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4 sm:space-y-5">
               <div>
-                <Label>Frequency</Label>
-                <Select value={safeSelectValue(formData.frequency, 'daily')} onValueChange={(value) => setFormData({...formData, frequency: value})}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm sm:text-base font-medium">Frequency</Label>
+                <div className="mt-2">
+                  <FrequencyDropdown
+                    value={formData.frequency || "daily"}
+                    onSelect={(value) => setFormData({...formData, frequency: value})}
+                    placeholder="Select frequency"
+                  />
+                </div>
               </div>
 
               <div>
-                <Label>Preferred Time</Label>
+                <Label className="text-sm sm:text-base font-medium">Preferred Time</Label>
                 <Input
                   type="time"
                   value={formData.time}
                   onChange={(e) => setFormData({...formData, time: e.target.value})}
-                  className="mt-2"
+                  className="h-11 sm:h-12 text-base mt-2"
                 />
               </div>
 
-              <div>
-                <Label className="flex items-center gap-2">
-                  <Globe className="h-4 w-4" />
-                  Schedule Timezone
-                </Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Timezone for email delivery schedule (can be different from your dashboard timezone)
-                </p>
-                <Select 
-                  value={safeSelectValue(formData.timezone, formData.user_timezone || "UTC")} 
-                  onValueChange={(value) => setFormData({...formData, timezone: value})}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {TIMEZONES.map((tz) => (
-                      <SelectItem key={tz.value} value={tz.value}>
-                        {tz.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
               <div>
-                <Label>Deadline (Optional)</Label>
+                <Label className="text-sm sm:text-base font-medium">Deadline (Optional)</Label>
                 <Input
                   type="datetime-local"
                   value={formData.deadline ? (() => {
@@ -735,20 +858,20 @@ function OnboardingScreen({ email, onComplete }) {
                       setFormData({...formData, deadline: null});
                     }
                   }}
-                  className="mt-2"
+                  className="h-11 sm:h-12 text-base mt-2"
                   placeholder="Leave empty for no deadline"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1.5">
                   Emails will stop being sent after this date and time
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setStep(4)} className="flex-1 h-11">Back</Button>
-                <Button onClick={handleFinalSubmit} disabled={loading} className="flex-1 h-11" data-testid="onboarding-finish-btn">
+              <div className="flex gap-2 sm:gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setStep(4)} className="flex-1 h-11 sm:h-12 text-base">Back</Button>
+                <Button onClick={handleFinalSubmit} disabled={loading} className="flex-1 h-11 sm:h-12 text-base font-medium" data-testid="onboarding-finish-btn">
                   {loading ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Setting Up...
                     </>
                   ) : (
@@ -778,7 +901,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     frequency: typeof user.schedule?.frequency === 'string' ? user.schedule.frequency : 'daily',
     time: user.schedule?.times?.[0] || (typeof user.schedule?.time === 'string' ? user.schedule.time : "09:00"),
     active: typeof user.active === 'boolean' ? user.active : false,
-    user_timezone: user.user_timezone || user.schedule?.timezone || "UTC"  // NEW: Global timezone
+    user_timezone: user.user_timezone || "UTC"  // Single timezone for dashboard and schedule
   });
   const [previewMessage, setPreviewMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -792,8 +915,9 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
   const [goalsLoading, setGoalsLoading] = useState(false);
   const [goalsRefreshKey, setGoalsRefreshKey] = useState(0);
   const goalsManagerRef = useRef(null);
+  const [pauseResumeLoading, setPauseResumeLoading] = useState(false);
 
-  const userTimezone = user.schedule?.timezone;
+  const userTimezone = user.user_timezone || "UTC";
   const userScheduleTimeLabel = formatScheduleTime(
     user.schedule?.times?.[0] || user.schedule?.time || "",
     userTimezone,
@@ -816,7 +940,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     }
   }, [onUserUpdate]);
 
-  const refreshUserData = useCallback(async () => {
+  const refreshUserData = useCallback(async (incrementRefreshKey = false) => {
     try {
       const response = await axios.get(`${API}/users/${user.email}`);
       // Sanitize response data before updating
@@ -824,10 +948,36 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       if (sanitizedUser) {
         handleUserStateUpdate(sanitizedUser);
       }
+      // Only increment refreshKey if explicitly requested (for manual refreshes)
+      if (incrementRefreshKey) {
+        setRefreshKey((prev) => prev + 1);
+      }
     } catch (error) {
       console.error("Failed to refresh user data:", error);
     }
   }, [user.email, handleUserStateUpdate]);
+
+  const handlePauseResume = useCallback(async () => {
+    if (pauseResumeLoading) return; // Prevent double-clicks
+    
+    setPauseResumeLoading(true);
+    try {
+      const isPaused = user.schedule?.paused;
+      const endpoint = isPaused 
+        ? `${API}/users/${user.email}/schedule/resume`
+        : `${API}/users/${user.email}/schedule/pause`;
+      
+      await axios.post(endpoint);
+      toast.success(isPaused ? "Schedule resumed!" : "Schedule paused!");
+      
+      // Refresh user data to update the widget
+      await refreshUserData(true);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to update schedule");
+    } finally {
+      setPauseResumeLoading(false);
+    }
+  }, [user.email, user.schedule?.paused, refreshUserData, pauseResumeLoading]);
 
   // Fetch message history for calendar
   const fetchMessageHistory = useCallback(async () => {
@@ -872,7 +1022,11 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
       const updates = {
         name: formData.name,
         active: formData.active,
-        user_timezone: formData.user_timezone  // NEW: Update global timezone
+        user_timezone: formData.user_timezone,  // Update single timezone
+        schedule: {
+          ...user.schedule,
+          timezone: formData.user_timezone  // Sync schedule timezone with user_timezone
+        }
       };
 
       const response = await axios.put(`${API}/users/${user.email}`, updates);
@@ -1044,7 +1198,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
           duration: 2500,
         });
       }, 1200);
-      await refreshUserData();
+      await refreshUserData(true); // Full refresh with refreshKey increment
     } catch (error) {
       console.error("Send now error:", error);
       
@@ -1089,20 +1243,20 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
     fetchAchievements();
   }, [fetchAchievements, refreshKey]);
 
-  // Auto-refresh user data every 30 seconds
+  // Auto-refresh user data every 60 seconds (reduced frequency to prevent blinking)
   useEffect(() => {
     const interval = setInterval(() => {
-      refreshUserData();
-    }, 30000); // 30 seconds
+      refreshUserData(false); // Silent refresh without incrementing refreshKey
+    }, 60000); // 60 seconds - reduced from 30 to prevent excessive refreshes
 
     return () => clearInterval(interval);
   }, [refreshUserData]);
 
-  // Auto-refresh goals to update next email countdown
+  // Auto-refresh goals to update next email countdown (less frequent)
   useEffect(() => {
     const interval = setInterval(() => {
       setGoalsRefreshKey(prev => prev + 1);
-    }, 30000); // Refresh every 30 seconds to update countdown
+    }, 60000); // Refresh every 60 seconds to update countdown
 
     return () => clearInterval(interval);
   }, []);
@@ -1297,6 +1451,34 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
 
               {/* Quick Stats Summary - Refined */}
               <div className="space-y-4">
+                {/* Days Since Start Widget */}
+                <Card className="border border-purple-500/20 bg-gradient-to-br from-purple-500/5 via-indigo-500/3 to-transparent shadow-sm hover:shadow-md hover:border-purple-500/30 transition-all duration-300 group">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/15 transition-colors">
+                        <CalendarIcon className="h-4 w-4 text-purple-500" />
+                      </div>
+                      <p className="text-xs font-semibold text-purple-600/80 dark:text-purple-400/80 uppercase tracking-wider">Days Since Start</p>
+                    </div>
+                    <p className="text-3xl font-bold tracking-tight bg-gradient-to-br from-purple-600 via-purple-500 to-indigo-500 bg-clip-text text-transparent mb-2">
+                      {user.days_since_start || (() => {
+                        // Calculate days since start if not available
+                        if (user.created_at) {
+                          const created = new Date(user.created_at);
+                          const now = new Date();
+                          const diffTime = Math.abs(now - created);
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          return diffDays;
+                        }
+                        return 1;
+                      })()}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-normal">
+                      Total days on your journey
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <Card className="border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-2.5 mb-4">
@@ -1395,8 +1577,22 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
 
             {/* Quick Status Cards - Enhanced Design */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Email Status */}
-              <Card className="border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group">
+              {/* Email Status - Clickable Pause/Resume Widget */}
+              <Card 
+                className={cn(
+                  "border border-border/30 hover:border-border/50 hover:shadow-md transition-all duration-300 bg-card/50 backdrop-blur-sm group cursor-pointer",
+                  pauseResumeLoading && "opacity-70 cursor-wait"
+                )}
+                onClick={handlePauseResume}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handlePauseResume();
+                  }
+                }}
+              >
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-4">
                     <div className={cn(
@@ -1405,12 +1601,16 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                         ? "bg-green-500/10 group-hover:bg-green-500/15" 
                         : "bg-muted/50"
                     )}>
-                      <Activity className={cn(
-                        "h-4 w-4 transition-colors",
-                        user?.active && !user?.schedule?.paused 
-                          ? "text-green-500" 
-                          : "text-muted-foreground"
-                      )} />
+                      {pauseResumeLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Activity className={cn(
+                          "h-4 w-4 transition-colors",
+                          user?.active && !user?.schedule?.paused 
+                            ? "text-green-500" 
+                            : "text-muted-foreground"
+                        )} />
+                      )}
                     </div>
                     <div className={cn(
                       "h-2.5 w-2.5 rounded-full mt-1 transition-all duration-300",
@@ -1429,7 +1629,11 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                       {user?.active && !user?.schedule?.paused ? "Active" : "Paused"}
                     </p>
                     <p className="text-xs text-muted-foreground font-normal">
-                      Email notifications
+                      {pauseResumeLoading 
+                        ? "Updating..." 
+                        : user?.active && !user?.schedule?.paused 
+                          ? "Click to pause" 
+                          : "Click to resume"}
                     </p>
                   </div>
                   {/* Schedule frequency indicator */}
@@ -1620,23 +1824,8 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-transparent hidden sm:block" />
             </div>
 
-            {/* Goals Manager - Mobile Redesigned Container */}
-            <div className="relative">
-              {/* Desktop: Enhanced Container with gradient */}
-              <div className="hidden sm:block relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/2 via-transparent to-blue-500/2 rounded-2xl -z-10 opacity-50" />
-                <div className="relative bg-card/40 backdrop-blur-sm border border-border/30 rounded-2xl p-6 sm:p-8 hover:border-border/50 transition-all duration-300">
-                  <GoalsManager ref={goalsManagerRef} user={user} onUpdate={handleUserStateUpdate} />
-                </div>
-              </div>
-              
-              {/* Mobile: Clean Minimalistic Design */}
-              <div className="sm:hidden">
-                <div className="bg-card border border-border rounded-xl overflow-hidden">
-                  <GoalsManager ref={goalsManagerRef} user={user} onUpdate={handleUserStateUpdate} />
-                </div>
-              </div>
-            </div>
+            {/* Goals Manager */}
+            <GoalsManager ref={goalsManagerRef} user={user} onUpdate={handleUserStateUpdate} />
 
             {/* Section Header */}
             <div className="flex items-center gap-0 sm:gap-3 pt-2">
@@ -1963,7 +2152,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
               email={user.email}
               timezone={userTimezone}
               refreshKey={refreshKey}
-              onFeedbackSubmitted={refreshUserData}
+              onFeedbackSubmitted={() => refreshUserData(true)} // Full refresh with refreshKey increment
             />
             </TabPanel>
 
@@ -1990,7 +2179,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 rounded-lg bg-muted group-hover:bg-accent transition-colors">
-                          <User className="h-5 w-5 text-foreground" />
+                          <User className="h-5 w-5 text-muted-foreground group-hover:text-foreground/80 transition-colors" />
                         </div>
                         <div>
                           <CardTitle className="text-lg sm:text-xl">Basic Information</CardTitle>
@@ -2039,7 +2228,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     All dates, times, streaks, and analytics will be displayed in this timezone.
                   </p>
                   <Select 
-                    value={safeSelectValue(formData.user_timezone || user.user_timezone || user.schedule?.timezone || "UTC", "UTC")} 
+                    value={safeSelectValue(formData.user_timezone || user.user_timezone || "UTC", "UTC")} 
                     onValueChange={(value) => setFormData({...formData, user_timezone: value})}
                     disabled={!editMode}
                   >
@@ -2076,7 +2265,7 @@ function DashboardScreen({ user, onLogout, onUserUpdate }) {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 rounded-lg bg-muted group-hover:bg-accent transition-colors">
-                          <Shield className="h-5 w-5 text-foreground" />
+                          <Shield className="h-5 w-5 text-muted-foreground group-hover:text-foreground/80 transition-colors" />
                         </div>
                         <div>
                           <CardTitle className="text-lg sm:text-xl">Account Management</CardTitle>
@@ -2449,7 +2638,8 @@ function AdminDashboard() {
     const map = new Map();
     users.forEach((item) => {
       if (item?.email) {
-        map.set(item.email, item.schedule?.timezone || null);
+        // Use user_timezone (preferred) or fallback to schedule.timezone for backward compatibility
+        map.set(item.email, item.user_timezone || item.schedule?.timezone || null);
       }
     });
     return map;
@@ -3401,7 +3591,8 @@ function AdminDashboard() {
                       ? user.personalities.filter(p => p && typeof p === 'object' && p.value)
                       : [];
                     const schedule = user.schedule || {};
-                    const scheduleTimezone = schedule.timezone;
+                    // Use user_timezone (preferred) or fallback to schedule.timezone for backward compatibility
+                    const scheduleTimezone = user.user_timezone || schedule.timezone || "UTC";
                     const scheduleTimeLabel = formatScheduleTime(
                       schedule.times?.[0] || schedule.time || "",
                       scheduleTimezone,
@@ -3794,7 +3985,7 @@ function AdminDashboard() {
                   <Card>
                     <CardHeader>
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-foreground" />
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
                         <CardTitle>System Errors ({errors.system_errors?.length || 0})</CardTitle>
                       </div>
                     </CardHeader>
@@ -4759,6 +4950,18 @@ function ErrorState({ onRetry }) {
 }
 
 function App() {
+  // Check if user is accessing unsubscribe route - public page, no auth required
+  if (window.location.pathname === "/unsubscribe") {
+    return (
+      <ErrorBoundary>
+        <div className="App">
+          <Toaster position="top-center" />
+          <UnsubscribePage />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
   // Check if user is accessing admin route - bypass Clerk auth for admin
   if (window.location.pathname === ROUTES.ADMIN.path) {
     return (

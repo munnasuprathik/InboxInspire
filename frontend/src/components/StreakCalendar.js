@@ -147,7 +147,7 @@ export const StreakCalendar = React.memo(function StreakCalendar({
             className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted/50 transition-colors flex-shrink-0"
             aria-label="Previous month"
           >
-            <ChevronLeft className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+            <ChevronLeft className="h-5 w-5 text-muted-foreground hover:text-foreground/70 transition-colors" />
           </button>
           <span className="text-sm sm:text-base font-semibold text-foreground min-w-[140px] sm:min-w-[160px] text-center flex-shrink-0">
             {getMonthYear()}
@@ -165,7 +165,7 @@ export const StreakCalendar = React.memo(function StreakCalendar({
             <ChevronRight className={`h-5 w-5 ${
               isCurrentMonth() 
                 ? 'text-muted-foreground/30' 
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground/70'
             }`} />
           </button>
         </div>

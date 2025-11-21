@@ -94,15 +94,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
     fetchFavorites();
   }, [email, refreshKey, fetchMessages, fetchFavorites]);
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchMessages();
-      fetchFavorites();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [fetchMessages, fetchFavorites]);
+  // Note: Auto-refresh is handled by parent component to prevent multiple overlapping refreshes
 
   // Debounce search query
   useEffect(() => {
@@ -532,7 +524,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground/70 transition-colors"
                 >
                   <X className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
@@ -567,7 +559,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                     "px-3 py-2 rounded-md transition-all duration-200 flex items-center gap-2 text-sm font-medium",
                     viewMode === 'list'
                       ? "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20"
-                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      : "text-muted-foreground hover:text-foreground/70 hover:bg-background/50"
                   )}
                   title="List View"
                 >
@@ -580,7 +572,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                     "px-3 py-2 rounded-md transition-all duration-200 flex items-center gap-2 text-sm font-medium relative",
                     viewMode === 'swipe'
                       ? "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-md shadow-primary/20"
-                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      : "text-muted-foreground hover:text-foreground/70 hover:bg-background/50"
                   )}
                   title="Swipe View - Swipe right to favorite, left to archive"
                 >
@@ -820,7 +812,7 @@ export const MessageHistory = React.memo(function MessageHistory({ email, timezo
                           <Heart
                             className={cn(
                               "h-4 w-4 sm:h-5 sm:w-5 transition-colors",
-                              isFavorite ? "fill-foreground text-foreground" : "text-muted-foreground hover:text-foreground"
+                              isFavorite ? "fill-foreground text-foreground" : "text-muted-foreground hover:text-foreground/70"
                             )}
                           />
                         </Button>

@@ -766,7 +766,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                         "flex-1 sm:flex-none flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 touch-manipulation min-h-[44px] sm:min-h-0",
                         activeTab === "basic" 
                           ? "bg-secondary text-secondary-foreground sm:bg-background sm:text-foreground sm:shadow-sm" 
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          : "text-muted-foreground hover:text-foreground/70 hover:bg-muted/50"
                       )}>
                         <Target className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span className="hidden xs:inline">Basic Details</span>
@@ -776,7 +776,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                         "flex-1 sm:flex-none flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 touch-manipulation min-h-[44px] sm:min-h-0",
                         activeTab === "content" 
                           ? "bg-secondary text-secondary-foreground sm:bg-background sm:text-foreground sm:shadow-sm" 
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          : "text-muted-foreground hover:text-foreground/70 hover:bg-muted/50"
                       )}>
                         <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span>Content</span>
@@ -785,7 +785,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                         "flex-1 sm:flex-none flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 touch-manipulation min-h-[44px] sm:min-h-0",
                         activeTab === "schedules" 
                           ? "bg-secondary text-secondary-foreground sm:bg-background sm:text-foreground sm:shadow-sm" 
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                          : "text-muted-foreground hover:text-foreground/70 hover:bg-muted/50"
                       )}>
                         <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span>Schedules</span>
@@ -1129,7 +1129,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                                       "h-10 sm:h-9 px-3 sm:px-3 rounded-md text-sm font-medium transition-all border touch-manipulation min-h-[40px] sm:min-h-0",
                                       isSelected
                                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                                        : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                                        : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground/70"
                                     )}
                                   >
                                     {day.short}
@@ -1346,7 +1346,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                               e.stopPropagation();
                               handleViewHistory(goal);
                             }}
-                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
+                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground/70 hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
                           >
                             <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 flex-shrink-0" />
                             <span className="text-[10px] sm:text-xs font-medium">History</span>
@@ -1361,7 +1361,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                               handleToggleActive(goal);
                             }}
                             disabled={loading}
-                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
+                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground/70 hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
                           >
                             {loading ? (
                               <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 animate-spin flex-shrink-0" />
@@ -1385,7 +1385,7 @@ export const GoalsManager = forwardRef(function GoalsManager({ user, onUpdate },
                               e.stopPropagation();
                               handleOpenModal(goal);
                             }}
-                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
+                            className="flex-1 flex-col sm:flex-row sm:justify-center h-auto py-2.5 sm:py-2.5 px-2 sm:px-3 text-muted-foreground hover:text-foreground/70 hover:bg-muted/50 touch-manipulation relative z-10 min-h-[44px]"
                           >
                             <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 mb-0.5 sm:mb-0 sm:mr-1.5 flex-shrink-0" />
                             <span className="text-[10px] sm:text-xs font-medium">Edit</span>

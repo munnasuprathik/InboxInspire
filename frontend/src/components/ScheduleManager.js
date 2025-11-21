@@ -20,17 +20,11 @@ export function ScheduleManager({ user, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const [schedule, setSchedule] = useState(() => {
     const userSchedule = user.schedule || {};
+    const userTimezone = user.user_timezone || "UTC";
     return {
       frequency: typeof userSchedule.frequency === 'string' ? userSchedule.frequency : 'daily',
       times: Array.isArray(userSchedule.times) ? userSchedule.times : (userSchedule.time ? [userSchedule.time] : ['09:00']),
-      timezone: typeof userSchedule.timezone === 'string' ? userSchedule.timezone : (() => {
-        try {
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          return typeof tz === 'string' ? tz : "UTC";
-        } catch {
-          return "UTC";
-        }
-      })(),
+      timezone: userTimezone, // Always use user_timezone
       paused: typeof userSchedule.paused === 'boolean' ? userSchedule.paused : false,
       skip_next: typeof userSchedule.skip_next === 'boolean' ? userSchedule.skip_next : false,
       custom_days: Array.isArray(userSchedule.custom_days) ? userSchedule.custom_days : [],
@@ -43,8 +37,15 @@ export function ScheduleManager({ user, onUpdate }) {
   const handleUpdateSchedule = async () => {
     setLoading(true);
     try {
+      // Ensure schedule timezone matches user_timezone
+      const userTimezone = user.user_timezone || "UTC";
+      const updatedSchedule = {
+        ...schedule,
+        timezone: userTimezone  // Always sync with user_timezone
+      };
+      
       await axios.put(`${API}/users/${user.email}`, {
-        schedule: schedule
+        schedule: updatedSchedule
       });
       toast.success("Schedule updated!");
       
@@ -105,7 +106,7 @@ export function ScheduleManager({ user, onUpdate }) {
       ...schedule,
       send_time_windows: [
         ...schedule.send_time_windows,
-        { start_time: "09:00", end_time: "17:00", timezone: schedule.timezone || "UTC", max_sends: 1 }
+        { start_time: "09:00", end_time: "17:00", timezone: user.user_timezone || "UTC", max_sends: 1 }
       ]
     });
   };
@@ -206,31 +207,15 @@ export function ScheduleManager({ user, onUpdate }) {
           />
         </div>
 
-        {/* Timezone */}
+        {/* Timezone Info - Read-only, managed in Settings */}
         <div>
           <Label>Timezone</Label>
-          <Select 
-            value={safeSelectValue(schedule.timezone, (() => {
-              try {
-                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                return typeof tz === 'string' ? tz : "UTC";
-              } catch {
-                return "UTC";
-              }
-            })())} 
-            onValueChange={(value) => setSchedule({...schedule, timezone: value})}
-          >
-            <SelectTrigger className="mt-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              {TIMEZONES.map((tz) => (
-                <SelectItem key={tz.value} value={tz.value}>
-                  {tz.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <p className="text-sm text-muted-foreground mt-2">
+            Timezone is managed in Settings. Current timezone: <strong>{user.user_timezone || "UTC"}</strong>
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            To change your timezone, go to Settings → Dashboard Timezone
+          </p>
         </div>
 
         {/* Send Time Windows */}

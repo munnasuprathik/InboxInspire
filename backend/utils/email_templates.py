@@ -6,6 +6,7 @@ import re
 import secrets
 import random
 from typing import List
+from datetime import datetime
 # Note: derive_goal_theme is defined in this file, not imported
 
 
@@ -63,48 +64,197 @@ def render_email_html(
     core_message: str,
     check_in_lines: List[str],
     quick_reply_lines: List[str],
+    unsubscribe_url: str = "",
+    days_since_start: int = 0,
 ) -> str:
-    """Return a clean and concise HTML email body."""
+    """Return a professional, modern HTML email body with excellent design."""
     safe_core = html.escape(core_message).replace("\n", "<br />")
     check_in_block = _render_list_items(check_in_lines)
     quick_reply_block = _render_list_items(quick_reply_lines)
 
     return f"""
-    <html>
+    <!DOCTYPE html>
+    <html lang="en">
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Your Daily Motivation</title>
         <style>
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 0; color: #1f2933; }}
-            .wrapper {{ max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 12px; padding: 28px 32px; box-shadow: 0 12px 30px rgba(40,52,71,0.08); }}
-            .streak {{ font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: #516070; margin-bottom: 20px; }}
-            .streak strong {{ color: #1b3a61; }}
-            .message {{ font-size: 16px; line-height: 1.6; margin: 0 0 24px 0; }}
-            .panel {{ border-top: 1px solid #e4e8f0; padding-top: 20px; margin-top: 12px; }}
-            .panel-title {{ font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #394966; margin: 0 0 10px 0; }}
-            .panel ul {{ margin: 0; padding-left: 18px; color: #1f2933; font-size: 15px; line-height: 1.5; }}
-            .panel ul li {{ margin-bottom: 8px; }}
-            .signature {{ margin-top: 28px; font-size: 13px; color: #5a687d; }}
-            .footer {{ margin-top: 28px; font-size: 11px; color: #8b97aa; text-align: center; }}
-            @media (max-width: 520px) {{ .wrapper {{ padding: 24px; }} }}
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; 
+                background: #ffffff;
+                margin: 0; 
+                padding: 0;
+                color: #1a1a1a; 
+                line-height: 1.6;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }}
+            .email-container {{
+                max-width: 600px;
+                margin: 0 auto;
+                background: #ffffff;
+            }}
+            .content-wrapper {{ 
+                padding: 48px 40px;
+            }}
+            .streak-badge {{
+                font-size: 10px;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                color: #9ca3af;
+                margin-bottom: 32px;
+                font-weight: 500;
+            }}
+            .streak-badge strong {{
+                color: #000000;
+                font-weight: 600;
+            }}
+            .message-content {{
+                font-size: 17px;
+                line-height: 1.75;
+                margin: 0 0 40px 0;
+                color: #1a1a1a;
+                letter-spacing: -0.01em;
+            }}
+            .message-content p {{
+                margin-bottom: 20px;
+            }}
+            .message-content p:last-child {{
+                margin-bottom: 0;
+            }}
+            .divider {{
+                height: 1px;
+                background: #f3f4f6;
+                margin: 40px 0;
+                border: none;
+            }}
+            .section {{
+                margin: 32px 0;
+            }}
+            .section-title {{
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: #9ca3af;
+                margin: 0 0 16px 0;
+            }}
+            .section-content {{
+                font-size: 15px;
+                line-height: 1.7;
+                color: #4b5563;
+            }}
+            .section-content ul {{
+                margin: 0;
+                padding-left: 0;
+                list-style: none;
+            }}
+            .section-content ul li {{
+                margin-bottom: 10px;
+                padding-left: 18px;
+                position: relative;
+            }}
+            .section-content ul li:before {{
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 10px;
+                width: 4px;
+                height: 4px;
+                background: #d1d5db;
+                border-radius: 50%;
+            }}
+            .section-content ul li:last-child {{
+                margin-bottom: 0;
+            }}
+            .section-content p {{
+                margin: 0;
+            }}
+            .signature {{
+                margin-top: 48px;
+                padding-top: 32px;
+                border-top: 1px solid #f3f4f6;
+                font-size: 14px;
+                color: #6b7280;
+            }}
+            .footer {{
+                padding: 32px 40px;
+                text-align: center;
+                border-top: 1px solid #f3f4f6;
+                background: #fafafa;
+            }}
+            .footer p {{
+                font-size: 11px;
+                color: #9ca3af;
+                margin: 6px 0;
+                line-height: 1.5;
+            }}
+            .footer a {{
+                color: #6b7280;
+                text-decoration: none;
+                transition: color 0.2s;
+            }}
+            .footer a:hover {{
+                color: #1a1a1a;
+            }}
+            .unsubscribe-link {{
+                display: inline-block;
+                margin-top: 16px;
+                padding: 8px 16px;
+                background: transparent;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                color: #6b7280;
+                text-decoration: none;
+                font-size: 11px;
+                font-weight: 500;
+                transition: all 0.2s;
+            }}
+            .unsubscribe-link:hover {{
+                background: #f9fafb;
+                border-color: #d1d5db;
+                color: #1a1a1a;
+            }}
+            @media (max-width: 600px) {{
+                .content-wrapper {{
+                    padding: 40px 28px;
+                }}
+                .message-content {{
+                    font-size: 16px;
+                }}
+                .footer {{
+                    padding: 28px 28px;
+                }}
+            }}
         </style>
     </head>
     <body>
-        <div class="wrapper">
-            <p class="streak"><strong>{html.escape(streak_icon)}</strong> {html.escape(streak_message)} · {streak_count} day{'s' if streak_count != 1 else ''}</p>
-            <div class="message">{safe_core}</div>
-            <div class="panel">
-                <p class="panel-title">Interactive Check-In</p>
-                {check_in_block or "<p style='margin:0;color:#3d4a5c;'>Share what today looks like.</p>"}
-            </div>
-            <div class="panel">
-                <p class="panel-title">Quick Reply Prompt</p>
-                {quick_reply_block or "<p style='margin:0;color:#3d4a5c;'>Reply with the first action you'll take next.</p>"}
-            </div>
-            <div class="signature">
-                <span>With you in this,</span>
-                <span>Tend Coach</span>
+        <div class="email-container">
+            <div class="content-wrapper">
+                <div class="streak-badge">
+                    <strong>{html.escape(streak_icon)}</strong> {html.escape(streak_message)}
+                    {f'<span style="margin-left: 16px; color: #6b7280;">| Day {days_since_start}</span>' if days_since_start > 0 else ''}
+                </div>
+                
+                <div class="message-content">
+                    {safe_core}
+                </div>
+                
+                {f'<hr class="divider" /><div class="section"><p class="section-title">Check-In</p><div class="section-content">{check_in_block or "<p>What does today look like for you?</p>"}</div></div>' if check_in_block or True else ''}
+                
+                {f'<div class="section"><p class="section-title">Quick Reply</p><div class="section-content">{quick_reply_block or "<p>Reply with your next action.</p>"}</div></div>' if quick_reply_block or True else ''}
+                
+                <div class="signature">
+                    — Tend
+                </div>
             </div>
             <div class="footer">
-                You are receiving this email because you subscribed to Tend updates.
+                <p>You're receiving this because you subscribed to Tend.</p>
+                {f'<a href="{unsubscribe_url}" class="unsubscribe-link">Unsubscribe</a>' if unsubscribe_url else ''}
+                <p style="margin-top: 16px;">© {html.escape(str(datetime.now().year))} Tend. All rights reserved.</p>
             </div>
         </div>
     </body>
