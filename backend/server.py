@@ -576,7 +576,7 @@ async def send_email(
         is_starttls_port = smtp_port == 587
         
         msg = MIMEMultipart('alternative')
-        msg['From'] = os.getenv('SENDER_EMAIL', smtp_username)
+        msg['From'] = f"Tend <{os.getenv('SENDER_EMAIL', smtp_username)}>"
         msg['To'] = to_email
         msg['Subject'] = subject
         
@@ -10353,8 +10353,20 @@ async def lifespan(app: FastAPI):
         else:
             logger.error("❌ CRITICAL: Scheduler is NOT running after startup!")
 
+        # Schedule primary goal emails (user.goals field) - runs every 5 minutes
+        # This ensures users' main goals continue to send emails
         await schedule_user_emails()
-        logger.info("✅ User email schedules initialized")
+        logger.info("✅ User email schedules initialized (primary goals)")
+        
+        # Add recurring job to keep primary goal emails scheduled
+        scheduler.add_job(
+            schedule_user_emails,
+            trigger='interval',
+            minutes=5,  # Run every 5 minutes to maintain schedules
+            id='schedule_primary_goal_emails',
+            replace_existing=True
+        )
+        logger.info("✅ Primary goal email scheduler job added (runs every 5 minutes)")
         
         startup_duration = time.time() - startup_start
         logger.info(f"🚀 Application startup completed in {startup_duration:.2f}s")

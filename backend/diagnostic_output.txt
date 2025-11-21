@@ -1,0 +1,91 @@
+================================================================================
+GOALS DIAGNOSTIC REPORT
+================================================================================
+
+Total Goals: 1
+   Active Goals: 1
+   Inactive Goals: 0
+
+================================================================================
+GOAL DETAILS:
+================================================================================
+
+1. Goal: Finish My MVP
+   ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Active: True
+   Mode: tone
+   Created: 2025-11-13T17:49:02.628857+00:00
+   Schedules: 1
+      1. None
+         Type: daily
+         Times: ['20:48']
+         Days: []
+         Active: True
+
+Total Goal Messages: 71
+   Pending: 6
+   Sent: 20
+   Failed: 0
+
+================================================================================
+UPCOMING MESSAGES (Next 10):
+================================================================================
+
+1. Message ID: 6dc07509-412c-4790-8e00-1cb0ce948ddd
+   Goal ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Scheduled For: 2025-11-22T15:18:00+00:00 (23.9h from now)
+   Status: pending
+   Schedule: None
+
+2. Message ID: 1114d47a-84a8-400b-b8b6-054fb380825f
+   Goal ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Scheduled For: 2025-11-23T15:18:00+00:00 (47.9h from now)
+   Status: pending
+   Schedule: None
+
+3. Message ID: 972ef1cf-d914-4ec2-98fd-f15186e426c3
+   Goal ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Scheduled For: 2025-11-24T15:18:00+00:00 (71.9h from now)
+   Status: pending
+   Schedule: None
+
+4. Message ID: 108afe85-9077-45ff-baf7-c7851695836a
+   Goal ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Scheduled For: 2025-11-25T15:18:00+00:00 (95.9h from now)
+   Status: pending
+   Schedule: None
+
+5. Message ID: c7095fd0-732a-4124-a421-fb03a84e023d
+   Goal ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Scheduled For: 2025-11-26T15:18:00+00:00 (119.9h from now)
+   Status: pending
+   Schedule: None
+
+6. Message ID: b8eb86f5-7e54-44bd-87fc-16fc969ae71b
+   Goal ID: 1299b193-1229-4154-9937-8ec09789d0e7
+   User: munnasuprathik79@gmail.com
+   Scheduled For: 2025-11-27T15:18:00+00:00 (143.9h from now)
+   Status: pending
+   Schedule: None
+
+================================================================================
+RECOMMENDATIONS:
+================================================================================
+Goals and messages look good!
+
+
+ERRORS:
+Traceback (most recent call last):
+  File "C:\Users\munna\Downloads\Tend-1\backend\diagnose_goals.py", line 108, in <module>
+    print("   \u2192 Check if APScheduler is running")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 3: character maps to <undefined>
